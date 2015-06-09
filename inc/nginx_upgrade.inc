@@ -431,6 +431,12 @@ fi
 
     time make install
 
+if [[ "$CLANG" = [yY] ]]; then
+    unset CC
+    unset CXX
+    unset CCACHE_CPP2
+fi        
+
 # unset_intelflags
 
 ################

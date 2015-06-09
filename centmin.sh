@@ -225,7 +225,7 @@ CCACHESIZE='2.2G'
 
 #####################################################
 # compiler related
-CLANG='n'
+CLANG='y'
 
 # When set to =y, will disable those listed installed services 
 # by default. The service is still installed but disabled 
