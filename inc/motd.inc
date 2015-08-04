@@ -1,6 +1,6 @@
 setupmotd() {
 
-ENABLEMOTD='y'
+ENABLEMOTD='n'
 
 MOTDCHECK=$(cat /etc/motd)
 CSFWCHECK=$(grep 'CSF' /etc/motd)
