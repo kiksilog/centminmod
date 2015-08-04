@@ -1,11 +1,11 @@
 #!/bin/sh
 EMAIL=''          # Server notification email address enter only 1 address
 PUSHOVER_EMAIL='' # Signup pushover.net push email notifications to mobile & tablets
-ZONEINFO=Etc/UTC  # Set Timezone
-NGINX_IPV='n' #NGINX IPV6 compile support for unattended mode only
+ZONEINFO=Asia/Manila  # Set Timezone
+NGINX_IPV='y' #NGINX IPV6 compile support for unattended mode only
 USEEDITOR='nano' # choice between nano or vim text editors for cmd shortcuts
 
-CUSTOMSERVERNAME='y'
+CUSTOMSERVERNAME='n'
 CUSTOMSERVERSTRING='nginx centminmod'
 PHPFPMCONFDIR='/usr/local/nginx/conf/phpfpmd'
 
@@ -254,24 +254,24 @@ CLANG_MEMCACHED='n'           # Memcached menu option 10 routine
 # by default. The service is still installed but disabled 
 # by default and can be re-enabled with commands:
 # service servicename start; chkconfig servicename on
-NSD_DISABLED=n                # when set to =y, NSD disabled by default with chkconfig off
-MEMCACHED_DISABLED=n          # when set to =y,  Memcached server disabled by default via chkconfig off
+NSD_DISABLED=y                # when set to =y, NSD disabled by default with chkconfig off
+MEMCACHED_DISABLED=y          # when set to =y,  Memcached server disabled by default via chkconfig off
 PHP_DISABLED=n                # when set to =y,  PHP-FPM disabled by default with chkconfig off
 MYSQLSERVICE_DISABLED=n       # when set to =y,  MariaDB MySQL service disabled by default with chkconfig off
-PUREFTPD_DISABLED=n           # when set to =y, Pure-ftpd service disabled by default with chkconfig off
+PUREFTPD_DISABLED=y           # when set to =y, Pure-ftpd service disabled by default with chkconfig off
 
 # General Configuration
 NGINXUPGRADESLEEP='6'
-NSD_INSTALL=y                # Install NSD (DNS Server)
+NSD_INSTALL=n                # Install NSD (DNS Server)
 NSD_VERSION='3.2.18'         # NSD Version
 NTP_INSTALL=y                # Install Network time protocol daemon
 NGINXPATCH=n                 # Set to y to allow NGINXPATCH_DELAY seconds time before Nginx configure and patching Nginx
 NGINXPATCH_DELAY='120'       # Number of seconds to pause Nginx configure routine during Nginx upgrades
 STRIPNGINX='y'               # set 'y' to strip nginx binary to reduce size
 NGINX_INSTALL=y              # Install Nginx (Webserver)
-NGINX_GEOIP=y                # Nginx GEOIP module install
-NGINX_SPDY=y                 # Nginx SPDY support
-NGINX_STREAM=y               # http://nginx.org/en/docs/stream/ngx_stream_core_module.html
+NGINX_GEOIP=n                # Nginx GEOIP module install
+NGINX_SPDY=n                 # Nginx SPDY support
+NGINX_STREAM=n               # http://nginx.org/en/docs/stream/ngx_stream_core_module.html
 NGINX_RTMP=n                 # Nginx RTMP Module support https://github.com/arut/nginx-rtmp-module
 NGINX_FLV=n                  # http://nginx.org/en/docs/http/ngx_http_flv_module.html
 NGINX_MP4=n                  # Nginx MP4 Module http://nginx.org/en/docs/http/ngx_http_mp4_module.html
@@ -279,7 +279,7 @@ NGINX_AUTHREQ=n              # http://nginx.org/en/docs/http/ngx_http_auth_reque
 NGINX_SECURELINK=y           # http://nginx.org/en/docs/http/ngx_http_secure_link_module.html
 NGINX_FANCYINDEX=y           # http://wiki.nginx.org/NgxFancyIndex
 NGINX_VHOSTSTATS=y           # https://github.com/vozlt/nginx-module-vts
-NGINX_PAGESPEED=y            # Install ngx_pagespeed
+NGINX_PAGESPEED=n            # Install ngx_pagespeed
 NGINX_PAGESPEEDGITMASTER=n   # Install ngx_pagespeed from official github master instead  
 NGXPGSPEED_VER='1.9.32.6-beta'
 NGINX_PAGESPEEDPSOL_VER='1.9.32.6'
@@ -398,7 +398,7 @@ PCRE_VERSION='8.37'          # NO longer used/ignored
 
 # PHP and Cache/Acceleration
 IMAGICKPHP_VER='3.3.0RC2'   # PHP extension for imagick
-MEMCACHED_INSTALL=y          # Install Memcached
+MEMCACHED_INSTALL=n          # Install Memcached
 LIBEVENT_VERSION='2.0.22'    # Use this version of Libevent
 MEMCACHED_VERSION='1.4.24'    # Use this version of Memcached server
 MEMCACHE_VERSION='3.0.8'     # Use this version of Memcache
@@ -414,7 +414,7 @@ MONGODB_SASL='n'            # SASL not working yet leave = n
 
 FFMPEGVER='0.6.0'
 SUHOSINVER='0.9.37.1'
-PHP_VERSION='5.4.43'          # Use this version of PHP
+PHP_VERSION='5.6.11'          # Use this version of PHP
 PHP_MIRRORURL='http://php.net'
 PHPUPGRADE_MIRRORURL='http://php.net'
 XCACHE_VERSION='3.2.0'       # Use this version of Xcache
