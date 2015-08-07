@@ -255,7 +255,7 @@ CLANG_MEMCACHED='n'           # Memcached menu option 10 routine
 # by default and can be re-enabled with commands:
 # service servicename start; chkconfig servicename on
 NSD_DISABLED=y                # when set to =y, NSD disabled by default with chkconfig off
-MEMCACHED_DISABLED=y          # when set to =y,  Memcached server disabled by default via chkconfig off
+MEMCACHED_DISABLED=n          # when set to =y,  Memcached server disabled by default via chkconfig off
 PHP_DISABLED=n                # when set to =y,  PHP-FPM disabled by default with chkconfig off
 MYSQLSERVICE_DISABLED=n       # when set to =y,  MariaDB MySQL service disabled by default with chkconfig off
 PUREFTPD_DISABLED=y           # when set to =y, Pure-ftpd service disabled by default with chkconfig off
@@ -398,7 +398,7 @@ PCRE_VERSION='8.37'          # NO longer used/ignored
 
 # PHP and Cache/Acceleration
 IMAGICKPHP_VER='3.3.0RC2'   # PHP extension for imagick
-MEMCACHED_INSTALL=n          # Install Memcached
+MEMCACHED_INSTALL=y          # Install Memcached
 LIBEVENT_VERSION='2.0.22'    # Use this version of Libevent
 MEMCACHED_VERSION='1.4.24'    # Use this version of Memcached server
 MEMCACHE_VERSION='3.0.8'     # Use this version of Memcache
