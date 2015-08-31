@@ -367,7 +367,7 @@ MYSQL_INSTALL=n              # Install official Oracle MySQL Server (MariaDB alt
 SENDMAIL_INSTALL=n           # Install Sendmail (and mailx) set to y and POSTFIX_INSTALL=n for sendmail
 POSTFIX_INSTALL=y            # Install Postfix (and mailx) set to n and SENDMAIL_INSTALL=y for sendmail
 # Nginx
-NGINX_VERSION='1.9.3'        # Use this version of Nginx
+NGINX_VERSION='1.9.4'        # Use this version of Nginx
 NGINX_VHOSTSSL='y'           # enable centmin.sh menu 2 prompt to create self signed SSL vhost 2nd vhost conf
 NGINXBACKUP='y'
 NGINXDIR='/usr/local/nginx'
@@ -383,7 +383,7 @@ CLOUDFLARE_PATCHSSL='n'    # set 'y' to implement Cloudflare's kill RC4 patch ht
 
 # LibreSSL
 LIBRESSL_SWITCH='y'        # if set to 'y' it overrides OpenSSL as the default static compiled option for Nginx server
-LIBRESSL_VERSION='2.2.2'   # Use this version of LibreSSL http://www.libressl.org/
+LIBRESSL_VERSION='2.2.3'   # Use this version of LibreSSL http://www.libressl.org/
 ##################################
 
 # Choose whether to compile Nginx --with-google_perftools_module
