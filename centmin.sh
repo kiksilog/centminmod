@@ -414,7 +414,7 @@ MONGODB_SASL='n'            # SASL not working yet leave = n
 
 FFMPEGVER='0.6.0'
 SUHOSINVER='0.9.37.1'
-PHP_VERSION='5.6.12'          # Use this version of PHP
+PHP_VERSION='5.6.13'          # Use this version of PHP
 PHP_MIRRORURL='http://php.net'
 PHPUPGRADE_MIRRORURL='http://php.net'
 XCACHE_VERSION='3.2.0'       # Use this version of Xcache
@@ -454,6 +454,28 @@ CUSTOM_CURLLIBSSHVER='1.6.0-2.0'     # libssh2 version
 CUSTOM_CURLRPMCARESVER='1.10.0-5.0'  # c-ares version
 CUSTOM_CURLRPMSYSURL='http://mirror.city-fan.org/ftp/contrib/sysutils/Mirroring'
 CUSTOM_CURLRPMLIBURL='http://mirror.city-fan.org/ftp/contrib/libraries'
+###############################################################
+# Settings for centmin.sh menu option 2 and option 22 for
+# the details of the self-signed SSL certificate that is auto 
+# generated. The default values where vhostname variable is 
+# auto added based on what you input for your site name
+# 
+# -subj "/C=US/ST=California/L=Los Angeles/O=${vhostname}/OU=${vhostname}/CN=${vhostname}"
+# 
+# You can only customise the first 5 variables for 
+# C = Country 2 digit code
+# ST = state 
+# L = Location as in city 
+# 0 = organisation
+# OU = organisational unit
+# 
+# if left blank # defaults to same as vhostname that is your domain
+# if set it overrides that
+SELFSIGNEDSSL_C='US'
+SELFSIGNEDSSL_ST='California'
+SELFSIGNEDSSL_L='Los Angeles'
+SELFSIGNEDSSL_O=''
+SELFSIGNEDSSL_OU=''
 ###############################################################
 
 MACHINE_TYPE=`uname -m` # Used to detect if OS is 64bit or not.
@@ -1433,7 +1455,7 @@ fi
 function funct_centos6check {
 
 
-if [[ "$CENTOSVER" == '5.6' || "$CENTOSVER" == '5.7'|| "$CENTOSVER" == '5.8' || "$CENTOSVER" == '6.0' || "$CENTOSVER" == '6.1' || "$CENTOSVER" == '6.2' || "$CENTOSVER" = '6.3' || "$CENTOSVER" = '6.4' || "$CENTOSVER" = '6.5' || "$CENTOSVER" = '6.6' || "$CENTOSVER" = '7.0' || "$CENTOSVER" = '7.1' ]]; then
+if [[ "$CENTOSVER" == '5.6' || "$CENTOSVER" == '5.7'|| "$CENTOSVER" == '5.8' || "$CENTOSVER" == '5.9' || "$CENTOSVER" == '5.10' || "$CENTOSVER" == '5.11' || "$CENTOSVER" == '6.0' || "$CENTOSVER" == '6.1' || "$CENTOSVER" == '6.2' || "$CENTOSVER" = '6.3' || "$CENTOSVER" = '6.4' || "$CENTOSVER" = '6.5' || "$CENTOSVER" = '6.6' || "$CENTOSVER" = '6.7' || "$CENTOSVER" = '6.8' || "$CENTOSVER" = '6.9' || "$CENTOSVER" = '7.0' || "$CENTOSVER" = '7.1' || "$CENTOSVER" = '7.2' || "$CENTOSVER" = '7.3' || "$CENTOSVER" = '7.4' || "$CENTOSVER" = '7.5' || "$CENTOSVER" = '7.6' || "$CENTOSVER" = '7.7' ]]; then
 
 MCRYPT=" --with-mcrypt"
 

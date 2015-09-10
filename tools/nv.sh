@@ -10,6 +10,8 @@ CUR_DIR="/usr/local/src/centminmod"
 DEBUG='n'
 # CURRENTIP=$(echo $SSH_CLIENT | awk '{print $1}')
 # CURRENTCOUNTRY=$(curl -s ipinfo.io/$CURRENTIP/country)
+CENTMINLOGDIR='/root/centminlogs'
+DT=`date +"%d%m%y-%H%M%S"`
 ################################################################
 # Setup Colours
 black='\E[30;40m'
@@ -43,6 +45,16 @@ echo -e "$color$message" ; $Reset
 return
 }
 ###############################################################
+
+if [[ "$(nginx -V 2>&1 | grep -Eo 'with-http_v2_module')" = 'with-http_v2_module' ]]; then
+  HTTPTWO=y
+  LISTENOPT='ssl http2'
+  COMP_HEADER='#spdy_headers_comp 5'
+else
+  HTTPTWO=n
+  LISTENOPT='ssl spdy'
+  COMP_HEADER='spdy_headers_comp 5'
+fi
 
 if [ ! -d "$CUR_DIR" ]; then
   echo "Error: directory $CUR_DIR does not exist"
@@ -82,30 +94,30 @@ fi
 
 while getopts ":d:s:u:" opt; do
     case "$opt" in
-	d)
-	 vhostname=${OPTARG}
+  d)
+   vhostname=${OPTARG}
    RUN=y
-	;;
-	s)
-	 sslconfig=${OPTARG}
+  ;;
+  s)
+   sslconfig=${OPTARG}
    RUN=y
-	;;
-	u)
-	 ftpuser=${OPTARG}
+  ;;
+  u)
+   ftpuser=${OPTARG}
    RUN=y
-	 if [ "$ftpuser" ]; then
-	 	PUREFTPD_DISABLED=n
-	 	if [ ! -f /usr/bin/pure-pw ]; then
+   if [ "$ftpuser" ]; then
+    PUREFTPD_DISABLED=n
+    if [ ! -f /usr/bin/pure-pw ]; then
       PUREFTPD_INSTALLED=n
       # echo "Error: pure-ftpd not installed"
     else
       autogenpass=y
     fi
-	 fi
-	;;
-	*)
-	 usage
-	;;
+   fi
+  ;;
+  *)
+   usage
+  ;;
      esac
 done
 
@@ -120,10 +132,10 @@ if [[ "$RUN" = [yY] && "$DEBUG" = [yY] ]]; then
   cecho "$ftpuser" $boldyellow
 fi
 
-CENTOSVER=$(cat /etc/redhat-release | awk '{ print $3 }')
+CENTOSVER=$(awk '{ print $3 }' /etc/redhat-release)
 
 if [ "$CENTOSVER" == 'release' ]; then
-    CENTOSVER=$(cat /etc/redhat-release | awk '{ print $4 }' | cut -d . -f1,2)
+    CENTOSVER=$(awk '{ print $4 }' /etc/redhat-release | cut -d . -f1,2)
     if [[ "$(cat /etc/redhat-release | awk '{ print $4 }' | cut -d . -f1)" = '7' ]]; then
         CENTOS_SEVEN='7'
     fi
@@ -155,83 +167,83 @@ cmservice() {
 }
 
 pureftpinstall() {
-	if [ ! -f /usr/bin/pure-pw ]; then
-		echo "pure-ftpd not installed"
-		echo "installing pure-ftpd"
-		CNIP=$(ip route get 8.8.8.8 | awk 'NR==1 {print $NF}')
+  if [ ! -f /usr/bin/pure-pw ]; then
+    echo "pure-ftpd not installed"
+    echo "installing pure-ftpd"
+    CNIP=$(ip route get 8.8.8.8 | awk 'NR==1 {print $NF}')
 
-		yum -q -y install pure-ftpd
-		cmchkconfig pure-ftpd on
-		sed -i 's/LF_FTPD = "10"/LF_FTPD = "3"/g' /etc/csf/csf.conf
-		sed -i 's/PORTFLOOD = \"\"/PORTFLOOD = \"21;tcp;5;300\"/g' /etc/csf/csf.conf
+    yum -q -y install pure-ftpd
+    cmchkconfig pure-ftpd on
+    sed -i 's/LF_FTPD = "10"/LF_FTPD = "3"/g' /etc/csf/csf.conf
+    sed -i 's/PORTFLOOD = \"\"/PORTFLOOD = \"21;tcp;5;300\"/g' /etc/csf/csf.conf
 
-		echo "configuring pure-ftpd for virtual user support"
-		# tweak /etc/pure-ftpd/pure-ftpd.conf
-		sed -i 's/# UnixAuthentication  /UnixAuthentication  /' /etc/pure-ftpd/pure-ftpd.conf
-		sed -i 's/VerboseLog                  no/VerboseLog                  yes/' /etc/pure-ftpd/pure-ftpd.conf
-		sed -i 's/# PureDB                        \/etc\/pure-ftpd\/pureftpd.pdb/PureDB                        \/etc\/pure-ftpd\/pureftpd.pdb/' /etc/pure-ftpd/pure-ftpd.conf
-		sed -i 's/#CreateHomeDir               yes/CreateHomeDir               yes/' /etc/pure-ftpd/pure-ftpd.conf
-		sed -i 's/# TLS                      1/TLS                      2/' /etc/pure-ftpd/pure-ftpd.conf
-		sed -i 's/# PassivePortRange          30000 50000/PassivePortRange    3000 3050/' /etc/pure-ftpd/pure-ftpd.conf
+    echo "configuring pure-ftpd for virtual user support"
+    # tweak /etc/pure-ftpd/pure-ftpd.conf
+    sed -i 's/# UnixAuthentication  /UnixAuthentication  /' /etc/pure-ftpd/pure-ftpd.conf
+    sed -i 's/VerboseLog                  no/VerboseLog                  yes/' /etc/pure-ftpd/pure-ftpd.conf
+    sed -i 's/# PureDB                        \/etc\/pure-ftpd\/pureftpd.pdb/PureDB                        \/etc\/pure-ftpd\/pureftpd.pdb/' /etc/pure-ftpd/pure-ftpd.conf
+    sed -i 's/#CreateHomeDir               yes/CreateHomeDir               yes/' /etc/pure-ftpd/pure-ftpd.conf
+    sed -i 's/# TLS                      1/TLS                      2/' /etc/pure-ftpd/pure-ftpd.conf
+    sed -i 's/# PassivePortRange          30000 50000/PassivePortRange    3000 3050/' /etc/pure-ftpd/pure-ftpd.conf
 
-		# fix default file/directory permissions
-		sed -i 's/Umask                       133:022/Umask                       137:027/' /etc/pure-ftpd/pure-ftpd.conf
+    # fix default file/directory permissions
+    sed -i 's/Umask                       133:022/Umask                       137:027/' /etc/pure-ftpd/pure-ftpd.conf
 
-		# ensure TLS Cipher preference protects against poodle attacks
+    # ensure TLS Cipher preference protects against poodle attacks
 
-		sed -i 's/# TLSCipherSuite           HIGH:MEDIUM:+TLSv1:!SSLv2:+SSLv3/TLSCipherSuite           HIGH:MEDIUM:+TLSv1:!SSLv2:!SSLv3/' /etc/pure-ftpd/pure-ftpd.conf
+    sed -i 's/# TLSCipherSuite           HIGH:MEDIUM:+TLSv1:!SSLv2:+SSLv3/TLSCipherSuite           HIGH:MEDIUM:+TLSv1:!SSLv2:!SSLv3/' /etc/pure-ftpd/pure-ftpd.conf
 
-		if [[ ! "$(grep 'TLSCipherSuite' /etc/pure-ftpd/pure-ftpd.conf)" ]]; then
-			echo 'TLSCipherSuite           HIGH:MEDIUM:+TLSv1:!SSLv2:!SSLv3' >> /etc/pure-ftpd/pure-ftpd.conf
-		fi
+    if [[ ! "$(grep 'TLSCipherSuite' /etc/pure-ftpd/pure-ftpd.conf)" ]]; then
+      echo 'TLSCipherSuite           HIGH:MEDIUM:+TLSv1:!SSLv2:!SSLv3' >> /etc/pure-ftpd/pure-ftpd.conf
+    fi
 
-		# check if /etc/pure-ftpd/pureftpd.passwd exists
-		if [ ! -f /etc/pure-ftpd/pureftpd.passwd ]; then
-			touch /etc/pure-ftpd/pureftpd.passwd
-			chmod 0600 /etc/pure-ftpd/pureftpd.passwd
-			pure-pw mkdb
-		fi
+    # check if /etc/pure-ftpd/pureftpd.passwd exists
+    if [ ! -f /etc/pure-ftpd/pureftpd.passwd ]; then
+      touch /etc/pure-ftpd/pureftpd.passwd
+      chmod 0600 /etc/pure-ftpd/pureftpd.passwd
+      pure-pw mkdb
+    fi
 
-		# generate /etc/pure-ftpd/pureftpd.pdb
-		if [ ! -f /etc/pure-ftpd/pureftpd.pdb ]; then
-			pure-pw mkdb
-		fi
+    # generate /etc/pure-ftpd/pureftpd.pdb
+    if [ ! -f /etc/pure-ftpd/pureftpd.pdb ]; then
+      pure-pw mkdb
+    fi
 
-		# check tweaks were made
-		echo
-		cat /etc/pure-ftpd/pure-ftpd.conf | egrep 'UnixAuthentication|VerboseLog|PureDB |CreateHomeDir|TLS|PassivePortRange|TLSCipherSuite'
+    # check tweaks were made
+    echo
+    cat /etc/pure-ftpd/pure-ftpd.conf | egrep 'UnixAuthentication|VerboseLog|PureDB |CreateHomeDir|TLS|PassivePortRange|TLSCipherSuite'
 
-		echo
-		echo "generating self-signed ssl certificate..."
-		echo "FTP client needs to use FTP (explicit SSL) mode"
-		echo "to connect to server's main ip address on port 21"
-		sleep 4
-		# echo "just hit enter at each prompt until complete"
-		# setup self-signed ssl certs
-		mkdir -p /etc/ssl/private
-		openssl req -x509 -days 7300 -sha256 -nodes -subj "/C=US/ST=California/L=Los Angeles/O=Default Company Ltd/CN==$CNIP" -newkey rsa:1024 -keyout /etc/pki/pure-ftpd/pure-ftpd.pem -out /etc/pki/pure-ftpd/pure-ftpd.pem
-		chmod 600 /etc/pki/pure-ftpd/*.pem
-		openssl x509 -in /etc/pki/pure-ftpd/pure-ftpd.pem -text -noout
-		echo 
-		# ls -lah /etc/ssl/private/
-		ls -lah /etc/pki/pure-ftpd
-		echo
-		echo "self-signed ssl cert generated"
-			
-		echo "pure-ftpd installed"
-		cmservice pure-ftpd restart
-		csf -r
+    echo
+    echo "generating self-signed ssl certificate..."
+    echo "FTP client needs to use FTP (explicit SSL) mode"
+    echo "to connect to server's main ip address on port 21"
+    sleep 4
+    # echo "just hit enter at each prompt until complete"
+    # setup self-signed ssl certs
+    mkdir -p /etc/ssl/private
+    openssl req -x509 -days 7300 -sha256 -nodes -subj "/C=US/ST=California/L=Los Angeles/O=Default Company Ltd/CN==$CNIP" -newkey rsa:1024 -keyout /etc/pki/pure-ftpd/pure-ftpd.pem -out /etc/pki/pure-ftpd/pure-ftpd.pem
+    chmod 600 /etc/pki/pure-ftpd/*.pem
+    openssl x509 -in /etc/pki/pure-ftpd/pure-ftpd.pem -text -noout
+    echo 
+    # ls -lah /etc/ssl/private/
+    ls -lah /etc/pki/pure-ftpd
+    echo
+    echo "self-signed ssl cert generated"
+      
+    echo "pure-ftpd installed"
+    cmservice pure-ftpd restart
+    csf -r
 
-		echo
-		echo "check /etc/pure-ftpd/pureftpd.passwd"
-		ls -lah /etc/pure-ftpd/pureftpd.passwd
+    echo
+    echo "check /etc/pure-ftpd/pureftpd.passwd"
+    ls -lah /etc/pure-ftpd/pureftpd.passwd
 
-		echo
-		echo "check /etc/pure-ftpd/pureftpd.pdb"
-		ls -lah /etc/pure-ftpd/pureftpd.pdb
+    echo
+    echo "check /etc/pure-ftpd/pureftpd.pdb"
+    ls -lah /etc/pure-ftpd/pureftpd.pdb
 
-		echo
-	fi
+    echo
+  fi
 }
 
 sslvhost() {
@@ -261,11 +273,71 @@ cd /usr/local/nginx/conf/ssl/${vhostname}
 
 cecho "---------------------------------------------------------------" $boldyellow
 cecho "Generating self signed SSL certificate..." $boldgreen
-sleep 5
+cecho "CSR file can also be used to be submitted for paid SSL certificates" $boldgreen
+cecho "If using for paid SSL certificates be sure to keep both private key and CSR safe" $boldgreen
+cecho "creating CSR File: ${vhostname}.csr" $boldgreen
+cecho "creating private key: ${vhostname}.key" $boldgreen
+cecho "creating self-signed SSL certificate: ${vhostname}.crt" $boldgreen
+sleep 9
 
-openssl req -new -newkey rsa:2048 -sha256 -nodes -out ${vhostname}.csr -keyout ${vhostname}.key -subj "/C=US/ST=California/L=Los Angeles/O=${vhostname}/CN=${vhostname}"
+if [[ -z "$SELFSIGNEDSSL_O" ]]; then
+  SELFSIGNEDSSL_O="$vhostname"
+else
+  SELFSIGNEDSSL_O="$SELFSIGNEDSSL_O"
+fi
+
+if [[ -z "$SELFSIGNEDSSL_OU" ]]; then
+  SELFSIGNEDSSL_OU="$vhostname"
+else
+  SELFSIGNEDSSL_OU="$SELFSIGNEDSSL_OU"
+fi
+
+openssl req -new -newkey rsa:2048 -sha256 -nodes -out ${vhostname}.csr -keyout ${vhostname}.key -subj "/C=${SELFSIGNEDSSL_C}/ST=${SELFSIGNEDSSL_ST}/L=${SELFSIGNEDSSL_L}/O=${SELFSIGNEDSSL_O}/OU=${SELFSIGNEDSSL_OU}/CN=${vhostname}"
 openssl x509 -req -days 36500 -sha256 -in ${vhostname}.csr -signkey ${vhostname}.key -out ${vhostname}.crt
 
+# echo
+# cecho "---------------------------------------------------------------" $boldyellow
+# cecho "Generating backup CSR and private key for HTTP Public Key Pinning..." $boldgreen
+# cecho "creating CSR File: ${vhostname}-backup.csr" $boldgreen
+# cecho "creating private key: ${vhostname}-backup.key" $boldgreen
+# sleep 5
+
+# openssl req -new -newkey rsa:2048 -sha256 -nodes -out ${vhostname}-backup.csr -keyout ${vhostname}-backup.key -subj "/C=${SELFSIGNEDSSL_C}/ST=${SELFSIGNEDSSL_ST}/L=${SELFSIGNEDSSL_L}/O=${SELFSIGNEDSSL_O}/OU=${SELFSIGNEDSSL_OU}/CN=${vhostname}"
+
+# echo
+# cecho "---------------------------------------------------------------" $boldyellow
+# cecho "Extracting Base64 encoded information for primary and secondary" $boldgreen
+# cecho "private key's SPKI - Subject Public Key Information" $boldgreen
+# cecho "Primary private key - ${vhostname}.key" $boldgreen
+# cecho "Backup private key - ${vhostname}-backup.key" $boldgreen
+# cecho "For HPKP - HTTP Public Key Pinning hash generation..." $boldgreen
+# sleep 5
+
+# echo
+# cecho "extracting SPKI Base64 encoded hash for primary private key = ${vhostname}.key ..." $boldgreen
+
+# openssl rsa -in ${vhostname}.key -outform der -pubout | openssl dgst -sha256 -binary | openssl enc -base64 | tee -a /usr/local/nginx/conf/ssl/${vhostname}/hpkp-info-primary-pin.txt
+
+# echo
+# cecho "extracting SPKI Base64 encoded hash for backup private key = ${vhostname}-backup.key ..." $boldgreen
+
+# openssl rsa -in ${vhostname}-backup.key -outform der -pubout | openssl dgst -sha256 -binary | openssl enc -base64 | tee -a /usr/local/nginx/conf/ssl/${vhostname}/hpkp-info-secondary-pin.txt
+
+# echo
+# cecho "HTTP Public Key Pinning Header for Nginx" $boldgreen
+
+# echo
+# cecho "for 7 days max-age including subdomains" $boldgreen
+# echo
+# echo "add_header Public-Key-Pins 'pin-sha256=\"$(cat /usr/local/nginx/conf/ssl/${vhostname}/hpkp-info-primary-pin.txt)\"; pin-sha256=\"$(cat /usr/local/nginx/conf/ssl/${vhostname}/hpkp-info-secondary-pin.txt)\"; max-age=86400; includeSubDomains';"
+
+# echo
+# cecho "for 7 days max-age excluding subdomains" $boldgreen
+# echo
+# echo "add_header Public-Key-Pins 'pin-sha256=\"$(cat /usr/local/nginx/conf/ssl/${vhostname}/hpkp-info-primary-pin.txt)\"; pin-sha256=\"$(cat /usr/local/nginx/conf/ssl/${vhostname}/hpkp-info-secondary-pin.txt)\"; max-age=86400';"
+
+
+echo
 cecho "---------------------------------------------------------------" $boldyellow
 cecho "Generating dhparam.pem file - can take a few minutes..." $boldgreen
 
@@ -448,7 +520,7 @@ cat > "/usr/local/nginx/conf/conf.d/${vhostname}.ssl.conf"<<ESS
 # }
 
 server {
-  listen 443 ssl spdy;
+  listen 443 $LISTENOPT;
   server_name $vhostname www.$vhostname;
 
   ssl_dhparam /usr/local/nginx/conf/ssl/${vhostname}/dhparam.pem;
@@ -463,7 +535,7 @@ server {
   #add_header Strict-Transport-Security "max-age=31536000; includeSubdomains;";
   #add_header  X-Content-Type-Options "nosniff";
   #add_header X-Frame-Options DENY;
-  spdy_headers_comp 5;
+  $COMP_HEADER;
   ssl_buffer_size 1400;
   ssl_session_tickets on;
   
@@ -558,7 +630,7 @@ server {
   # Enable for vBulletin usage WITHOUT vbSEO installed
   # More example Nginx vhost configurations at
   # http://centminmod.com/nginx_configure.html
-  #try_files		\$uri \$uri/ /index.php;
+  #try_files    \$uri \$uri/ /index.php;
 
   }
 
@@ -604,6 +676,8 @@ if [[ "$sslconfig" = [yY] ]]; then
   cecho "Self-signed SSL Certificate: /usr/local/nginx/conf/ssl/${vhostname}/${vhostname}.crt" $boldyellow
   cecho "SSL Private Key: /usr/local/nginx/conf/ssl/${vhostname}/${vhostname}.key" $boldyellow
   cecho "SSL CSR File: /usr/local/nginx/conf/ssl/${vhostname}/${vhostname}.csr" $boldyellow
+  # cecho "Backup SSL Private Key: /usr/local/nginx/conf/ssl/${vhostname}/${vhostname}-backup.key" $boldyellow
+  # cecho "Backup SSL CSR File: /usr/local/nginx/conf/ssl/${vhostname}/${vhostname}-backup.csr" $boldyellow    
 fi
 echo
 cecho "upload files to /home/nginx/domains/$vhostname/public" $boldwhite
@@ -634,6 +708,7 @@ fi
 cecho " rm -rf /usr/local/nginx/conf/ssl/${vhostname}/${vhostname}.crt" $boldwhite
 cecho " rm -rf /usr/local/nginx/conf/ssl/${vhostname}/${vhostname}.key" $boldwhite
 cecho " rm -rf /usr/local/nginx/conf/ssl/${vhostname}/${vhostname}.csr" $boldwhite
+cecho " rm -rf /usr/local/nginx/conf/ssl/${vhostname}" $boldwhite
 cecho " rm -rf /home/nginx/domains/$vhostname" $boldwhite
 cecho " service nginx restart" $boldwhite
 cecho "-------------------------------------------------------------" $boldyellow
@@ -653,7 +728,9 @@ fi
 }
 
 if [[ "$RUN" = [yY] ]]; then
-  funct_nginxaddvhost
+  {
+    funct_nginxaddvhost
+  } 2>&1 | tee ${CENTMINLOGDIR}/centminmod_${DT}_nginx_addvhost_nv.log
 else
   usage
 fi

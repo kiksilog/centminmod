@@ -1,23 +1,174 @@
-wpinstall() {
-    if [ ! -f /usr/bin/wp ]; then
-      cecho "------------------------------------------------------------" $boldgreen
-      cecho "Installing wpcli.sh" $boldyellow
-      cecho "------------------------------------------------------------" $boldgreen
-      if [ -d "${SCRIPT_DIR}/addons" ]; then
-        cd ${SCRIPT_DIR}/addons      
-      fi
-      chmod +x wpcli.sh
-      ./wpcli.sh install
+#!/bin/bash
+###############################################################
+# standalone nginx vhost creation script for centminmod.com
+# .09 beta01 and higher written by George Liu
+# modified for wordpress setup
+################################################################
+branchname='123.08stable'
+#CUR_DIR="/usr/local/src/centminmod-${branchname}"
+CUR_DIR="/usr/local/src/centminmod"
+
+DEBUG='n'
+# CURRENTIP=$(echo $SSH_CLIENT | awk '{print $1}')
+# CURRENTCOUNTRY=$(curl -s ipinfo.io/$CURRENTIP/country)
+CENTMINLOGDIR='/root/centminlogs'
+DT=`date +"%d%m%y-%H%M%S"`
+################################################################
+# Setup Colours
+black='\E[30;40m'
+red='\E[31;40m'
+green='\E[32;40m'
+yellow='\E[33;40m'
+blue='\E[34;40m'
+magenta='\E[35;40m'
+cyan='\E[36;40m'
+white='\E[37;40m'
+
+boldblack='\E[1;30;40m'
+boldred='\E[1;31;40m'
+boldgreen='\E[1;32;40m'
+boldyellow='\E[1;33;40m'
+boldblue='\E[1;34;40m'
+boldmagenta='\E[1;35;40m'
+boldcyan='\E[1;36;40m'
+boldwhite='\E[1;37;40m'
+
+Reset="tput sgr0"      #  Reset text attributes to normal
+                       #+ without clearing screen.
+
+cecho ()                     # Coloured-echo.
+                             # Argument $1 = message
+                             # Argument $2 = color
+{
+message=$1
+color=$2
+echo -e "$color$message" ; $Reset
+return
+}
+###############################################################
+
+if [ ! -d /root/tools ]; then
+  mkdir -p /root/tools
+fi
+
+if [[ "$(nginx -V 2>&1 | grep -Eo 'with-http_v2_module')" = 'with-http_v2_module' ]]; then
+  HTTPTWO=y
+  LISTENOPT='ssl http2'
+  COMP_HEADER='#spdy_headers_comp 5'
+else
+  HTTPTWO=n
+  LISTENOPT='ssl spdy'
+  COMP_HEADER='spdy_headers_comp 5'
+fi
+
+if [ ! -d "$CUR_DIR" ]; then
+  echo "Error: directory $CUR_DIR does not exist"
+  echo "check $0 branchname variable is set correctly"
+  exit 1
+fi
+
+usage() { 
+# if pure-ftpd service running = 0
+if [[ "$(ps aufx | grep -v grep | grep 'pure-ftpd' 2>&1>/dev/null; echo $?)" = '0' ]]; then
+  echo
+  cecho "Usage: $0 [-d yourdomain.com] [-s y|n] [-u ftpusername]" $boldyellow 1>&2; 
+  echo; 
+  cecho "  -d  yourdomain.com or subdomain.yourdomain.com" $boldyellow
+  cecho "  -s  ssl self-signed create = y or n" $boldyellow
+  cecho "  -u  your FTP username" $boldyellow
+  echo
+  cecho "  example:" $boldyellow
+  echo
+  cecho "  $0 -d yourdomain.com -s y -u ftpusername" $boldyellow
+  echo
+  exit 1;
+else
+  echo
+  cecho "Usage: $0 [-d yourdomain.com] [-s y|n]" $boldyellow 1>&2; 
+  echo; 
+  cecho "  -d  yourdomain.com or subdomain.yourdomain.com" $boldyellow
+  cecho "  -s  ssl self-signed create = y or n" $boldyellow
+  echo
+  cecho "  example:" $boldyellow
+  echo
+  cecho "  $0 -d yourdomain.com -s y" $boldyellow  
+  echo  
+  exit 1;
+fi
+}
+
+while getopts ":d:s:u:" opt; do
+    case "$opt" in
+	d)
+	 vhostname=${OPTARG}
+   RUN=y
+	;;
+	s)
+	 sslconfig=${OPTARG}
+   RUN=y
+	;;
+	u)
+	 ftpuser=${OPTARG}
+   RUN=y
+	 if [ "$ftpuser" ]; then
+	 	PUREFTPD_DISABLED=n
+	 	if [ ! -f /usr/bin/pure-pw ]; then
+      PUREFTPD_INSTALLED=n
+      # echo "Error: pure-ftpd not installed"
     else
-      cecho "------------------------------------------------------------" $boldgreen
-      cecho "Update wp-cli tool" $boldyellow
-      cecho "------------------------------------------------------------" $boldgreen
-      if [ -d "${SCRIPT_DIR}/addons" ]; then
-        cd ${SCRIPT_DIR}/addons      
-      fi
-      chmod +x wpcli.sh
-      ./wpcli.sh update
+      autogenpass=y
     fi
+	 fi
+	;;
+	*)
+	 usage
+	;;
+     esac
+done
+
+if [[ "$vhostssl" && "$sslconfig" ]]; then
+  RUN=y
+fi
+
+if [[ "$RUN" = [yY] && "$DEBUG" = [yY] ]]; then
+  echo
+  cecho "$vhostname" $boldyellow
+  cecho "$sslconfig" $boldyellow
+  cecho "$ftpuser" $boldyellow
+fi
+
+CENTOSVER=$(awk '{ print $3 }' /etc/redhat-release)
+
+if [ "$CENTOSVER" == 'release' ]; then
+    CENTOSVER=$(awk '{ print $4 }' /etc/redhat-release | cut -d . -f1,2)
+    if [[ "$(cat /etc/redhat-release | awk '{ print $4 }' | cut -d . -f1)" = '7' ]]; then
+        CENTOS_SEVEN='7'
+    fi
+fi
+
+if [[ "$(cat /etc/redhat-release | awk '{ print $3 }' | cut -d . -f1)" = '6' ]]; then
+    CENTOS_SIX='6'
+fi
+
+if [ "$CENTOSVER" == 'Enterprise' ]; then
+    CENTOSVER=$(cat /etc/redhat-release | awk '{ print $7 }')
+    OLS='y'
+fi
+
+cmservice() {
+        servicename=$1
+        action=$2
+        if [[ "$CENTOS_SEVEN" != '7' || "${servicename}" = 'php-fpm' || "${servicename}" = 'nginx' || "${servicename}" = 'memcached' || "${servicename}" = 'nsd' || "${servicename}" = 'csf' || "${servicename}" = 'lfd' ]]; then
+        echo "service ${servicename} $action"
+        if [[ "$CMSDEBUG" = [nN] ]]; then
+                service ${servicename} $action
+        fi
+        else
+        echo "systemctl $action ${servicename}.service"
+        if [[ "$CMSDEBUG" = [nN] ]]; then
+                systemctl $action ${servicename}.service
+        fi
+        fi
 }
 
 dbsetup() {
@@ -34,22 +185,92 @@ dbsetup() {
   mysql -e "GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, INDEX, ALTER, LOCK TABLES, CREATE TEMPORARY TABLES ON ${DB}.* TO ${DBUSER}@'localhost'; FLUSH PRIVILEGES;"
 }
 
+pureftpinstall() {
+	if [ ! -f /usr/bin/pure-pw ]; then
+		echo "pure-ftpd not installed"
+		echo "installing pure-ftpd"
+		CNIP=$(ip route get 8.8.8.8 | awk 'NR==1 {print $NF}')
+
+		yum -q -y install pure-ftpd
+		cmchkconfig pure-ftpd on
+		sed -i 's/LF_FTPD = "10"/LF_FTPD = "3"/g' /etc/csf/csf.conf
+		sed -i 's/PORTFLOOD = \"\"/PORTFLOOD = \"21;tcp;5;300\"/g' /etc/csf/csf.conf
+
+		echo "configuring pure-ftpd for virtual user support"
+		# tweak /etc/pure-ftpd/pure-ftpd.conf
+		sed -i 's/# UnixAuthentication  /UnixAuthentication  /' /etc/pure-ftpd/pure-ftpd.conf
+		sed -i 's/VerboseLog                  no/VerboseLog                  yes/' /etc/pure-ftpd/pure-ftpd.conf
+		sed -i 's/# PureDB                        \/etc\/pure-ftpd\/pureftpd.pdb/PureDB                        \/etc\/pure-ftpd\/pureftpd.pdb/' /etc/pure-ftpd/pure-ftpd.conf
+		sed -i 's/#CreateHomeDir               yes/CreateHomeDir               yes/' /etc/pure-ftpd/pure-ftpd.conf
+		sed -i 's/# TLS                      1/TLS                      2/' /etc/pure-ftpd/pure-ftpd.conf
+		sed -i 's/# PassivePortRange          30000 50000/PassivePortRange    3000 3050/' /etc/pure-ftpd/pure-ftpd.conf
+
+		# fix default file/directory permissions
+		sed -i 's/Umask                       133:022/Umask                       137:027/' /etc/pure-ftpd/pure-ftpd.conf
+
+		# ensure TLS Cipher preference protects against poodle attacks
+
+		sed -i 's/# TLSCipherSuite           HIGH:MEDIUM:+TLSv1:!SSLv2:+SSLv3/TLSCipherSuite           HIGH:MEDIUM:+TLSv1:!SSLv2:!SSLv3/' /etc/pure-ftpd/pure-ftpd.conf
+
+		if [[ ! "$(grep 'TLSCipherSuite' /etc/pure-ftpd/pure-ftpd.conf)" ]]; then
+			echo 'TLSCipherSuite           HIGH:MEDIUM:+TLSv1:!SSLv2:!SSLv3' >> /etc/pure-ftpd/pure-ftpd.conf
+		fi
+
+		# check if /etc/pure-ftpd/pureftpd.passwd exists
+		if [ ! -f /etc/pure-ftpd/pureftpd.passwd ]; then
+			touch /etc/pure-ftpd/pureftpd.passwd
+			chmod 0600 /etc/pure-ftpd/pureftpd.passwd
+			pure-pw mkdb
+		fi
+
+		# generate /etc/pure-ftpd/pureftpd.pdb
+		if [ ! -f /etc/pure-ftpd/pureftpd.pdb ]; then
+			pure-pw mkdb
+		fi
+
+		# check tweaks were made
+		echo
+		cat /etc/pure-ftpd/pure-ftpd.conf | egrep 'UnixAuthentication|VerboseLog|PureDB |CreateHomeDir|TLS|PassivePortRange|TLSCipherSuite'
+
+		echo
+		echo "generating self-signed ssl certificate..."
+		echo "FTP client needs to use FTP (explicit SSL) mode"
+		echo "to connect to server's main ip address on port 21"
+		sleep 4
+		# echo "just hit enter at each prompt until complete"
+		# setup self-signed ssl certs
+		mkdir -p /etc/ssl/private
+		openssl req -x509 -days 7300 -sha256 -nodes -subj "/C=US/ST=California/L=Los Angeles/O=Default Company Ltd/CN==$CNIP" -newkey rsa:1024 -keyout /etc/pki/pure-ftpd/pure-ftpd.pem -out /etc/pki/pure-ftpd/pure-ftpd.pem
+		chmod 600 /etc/pki/pure-ftpd/*.pem
+		openssl x509 -in /etc/pki/pure-ftpd/pure-ftpd.pem -text -noout
+		echo 
+		# ls -lah /etc/ssl/private/
+		ls -lah /etc/pki/pure-ftpd
+		echo
+		echo "self-signed ssl cert generated"
+			
+		echo "pure-ftpd installed"
+		cmservice pure-ftpd restart
+		csf -r
+
+		echo
+		echo "check /etc/pure-ftpd/pureftpd.passwd"
+		ls -lah /etc/pure-ftpd/pureftpd.passwd
+
+		echo
+		echo "check /etc/pure-ftpd/pureftpd.pdb"
+		ls -lah /etc/pure-ftpd/pureftpd.pdb
+
+		echo
+	fi
+}
+
 sslvhost() {
 
 cecho "---------------------------------------------------------------" $boldyellow
 cecho "SSL Vhost Setup..." $boldgreen
 cecho "---------------------------------------------------------------" $boldyellow
 echo ""
-
-if [[ "$(nginx -V 2>&1 | grep -Eo 'with-http_v2_module')" = 'with-http_v2_module' ]]; then
-  HTTPTWO=y
-  LISTENOPT='ssl http2'
-  COMP_HEADER='#spdy_headers_comp 5'
-else
-  HTTPTWO=n
-  LISTENOPT='ssl spdy'
-  COMP_HEADER='spdy_headers_comp 5'
-fi
 
 if [ ! -f /usr/local/nginx/conf/ssl ]; then
   mkdir -p /usr/local/nginx/conf/ssl
@@ -149,59 +370,25 @@ cecho "dhparam file generation time: $DHPARAMTIME" $boldyellow
 
 }
 
-wpacctsetup() {
+funct_nginxaddvhost() {
 PUREUSER=nginx
 PUREGROUP=nginx
 CNIP=$(ip route get 8.8.8.8 | awk 'NR==1 {print $NF}')
-pureftpinstall
-
-wpinstall
-  WPSALT=$(openssl rand -base64 18 | cut -c1-18 | sed -e 's|/||' -e 's|+||')
-  WPSALTB=$(openssl rand -base64 11 | cut -c1-11 | sed -e 's|/||' -e 's|+||')
-  WPN=$RANDOM
-  WPNB=$RANDOM
-  WPADMINUSER="z${WPSALT}wp${WPNB}"
-  WPADMINPASS="z${WPSALTB}wps${WPN}"
- 
-if [ ! -d /root/tools ]; then
-  mkdir -p /root/tools
+if [[ "$PUREFTPD_INSTALLED" = [nN] ]]; then
+  pureftpinstall
 fi
 
-echo
-cecho "-------------------------------------------------------------" $boldyellow
-cecho "Setup full Nginx vhost + Wordpress + WP Super Cache" $boldgreen
-cecho "-------------------------------------------------------------" $boldyellow
-echo
+cecho "---------------------------------------------------------------" $boldyellow
+cecho "Nginx Vhost Setup..." $boldgreen
+cecho "---------------------------------------------------------------" $boldyellow
 
-read -ep "Enter vhost domain name you want to add (without www. prefix): " vhostname
+# read -ep "Enter vhost domain name you want to add (without www. prefix): " vhostname
 
-TESTVHOST=$(echo $vhostname | grep '\/')
-while [[ "$TESTVHOST" ]]; do
-  echo "!! only domain.com or subdomain.domain.com supported !!"
-  echo "   subdirectory is not supported right now"
-  read -ep "re-enter vhost domain name you want to add (without www. prefix): " vhostname
-  TESTVHOST=$(echo $vhostname | grep '\/')
+if [[ "$sslconfig" = [yY] ]]; then
   echo
-done
-
-
-if [[ "$NGINX_VHOSTSSL" = [yY] ]]; then
-  echo
-  read -ep "Create a self-signed SSL certificate Nginx vhost? [y/n]: " vhostssl
-  echo
+  vhostssl=y
+  # read -ep "Create a self-signed SSL certificate Nginx vhost? [y/n]: " vhostssl
 fi
-
-read -ep "Enter email address for Wordpress Installation: " WPADMINEMAIL
-
-TESTEMAIL=$(echo "${WPADMINEMAIL}" |  grep '^[a-zA-Z0-9._%+-]*@[a-zA-Z0-9-]*[\.[a-zA-Z0-9]*]*[a-zA-Z0-9]$')
-# echo "$TESTEMAIL"
-while [[ "$TESTEMAIL" = "" ]]; do
-  echo
-  echo "!! make sure email address is valid and typed correctly !!"
-  read -ep "Enter email address for Wordpress Installation: " WPADMINEMAIL
-  TESTEMAIL=$(echo "${WPADMINEMAIL}" |  grep '^[a-zA-Z0-9._%+-]*@[a-zA-Z0-9-]*[\.[a-zA-Z0-9]*]*[a-zA-Z0-9]$')
-  echo
-done
 
 if [[ "$PUREFTPD_DISABLED" = [nN] ]]; then
   if [ ! -f /usr/sbin/cracklib-check ]; then
@@ -209,44 +396,23 @@ if [[ "$PUREFTPD_DISABLED" = [nN] ]]; then
   fi
   if [ ! -f /usr/bin/pwgen ]; then
     yum -y -q install pwgen
-  fi  
-  read -ep "Create FTP username for vhost domain (enter username): " ftpuser
-  read -ep "Do you want to auto generate FTP password (recommended) [y/n]: " autogenpass
+  fi
+  echo
+  # read -ep "Create FTP username for vhost domain (enter username): " ftpuser
+  # read -ep "Do you want to auto generate FTP password (recommended) [y/n]: " autogenpass
+  # echo
 
   if [[ "$autogenpass" = [yY] ]]; then
     ftppass=$(pwgen -1cnys 21)
-  else
-    read -ep "Create FTP password for $ftpuser (enter password): " ftppass
-  
-    # simple password strength check
-    # utilise http://cracklib.sourceforge.net/ too
-    CHECKPASSWD="$(cracklib-check <<<"$ftppass")"
-    okay="$(awk -F': ' '{ print $2}' <<<"$CHECKPASSWD")"
-    while [[ "$okay" != "OK" ]]; do
-      echo "!! password strength not strong enough !! "
-      echo "!! do not use common dictionary words !! "
-      echo "!! do not use short passwords !! "
-      echo "!! do not use simplistic passwords !! "
-      echo
-      read -ep "re-enter FTP password for $ftpuser (enter password): " ftppass
-      CHECKPASSWD="$(cracklib-check <<<"$ftppass")"
-      okay="$(awk -F': ' '{ print $2}' <<<"$CHECKPASSWD")"
-    done
-  fi # autogenpass
-  echo
-  echo "FTP username you entered: $ftpuser"
-  if [[ "$autogenpass" = [yY] ]]; then
     echo "FTP password auto generated: $ftppass"
-  else
-    echo "FTP password you entered: $ftppass"    
-  fi
+  fi # autogenpass
 fi
 
 echo ""
 
 if [ ! -d /home/nginx/domains/$vhostname ]; then
 
-dbsetup
+dbsetup  
 
 # Checking Permissions, making directories, example index.html
 umask 027
@@ -257,7 +423,32 @@ if [[ "$PUREFTPD_DISABLED" = [nN] ]]; then
   pure-pw mkdb
 fi
 
-# where index.html was
+cat > "/home/nginx/domains/$vhostname/public/index.html" <<END
+<html>
+<head>
+<title>$vhostname</title>
+</head>
+<body>
+<p>Welcome to $vhostname. This index.html page can be removed.</p>
+
+<p>Useful Centmin Mod info and links to bookmark.</p>
+
+<ul>
+  <li>Getting Started Guide - <a href="http://centminmod.com/getstarted.html" target="_blank">http://centminmod.com/getstarted.html</a></li>
+  <li>Latest Centmin Mod version - <a href="http://centminmod.com" target="_blank">http://centminmod.com</a></li>
+  <li>Centmin Mod FAQ - <a href="http://centminmod.com/faq.html" target="_blank">http://centminmod.com/faq.html</a></li>
+  <li>Change Log - <a href="http://centminmod.com/changelog.html" target="_blank">http://centminmod.com/changelog.html</a></li>
+  <li>Google+ Page latest news <a href="http://centminmod.com/gpage" target="_blank">http://centminmod.com/gpage</a></li>
+  <li>Centmin Mod Community Forum <a href="https://community.centminmod.com/" target="_blank">https://community.centminmod.com/</a></li>
+  <li>Centmin Mod Twitter <a href="https://twitter.com/centminmod" target="_blank">https://twitter.com/centminmod</a></li>
+  <li>Centmin Mod Facebook Page <a href="https://www.facebook.com/centminmodcom" target="_blank">https://www.facebook.com/centminmodcom</a></li>
+</ul>
+
+<p><a href="https://www.digitalocean.com/?refcode=c1cb367108e8" target="_blank">Cheap VPS Hosting at Digitalocean</a></p>
+
+</body>
+</html>
+END
 
     cp -R $CUR_DIR/htdocs/custom_errorpages/* /home/nginx/domains/$vhostname/public
 umask 022
@@ -300,7 +491,7 @@ else
   CHACHACIPHERS=""
 fi
 
-# main non-ssl vhost at yourdomain.com.conf for Wordpress
+# main non-ssl vhost at yourdomain.com.conf
 cat > "/usr/local/nginx/conf/conf.d/$vhostname.conf"<<ENSS
 # Centmin Mod Getting Started Guide
 # must read http://centminmod.com/getstarted.html
@@ -343,10 +534,10 @@ include /usr/local/nginx/conf/wpsupercache_${vhostname}.conf;
   #autoindex  on;
 
   # for wordpress super cache plugin
-  try_files /wp-content/cache/supercache/\$http_host/\$cache_uri/index.html \$uri \$uri/ /index.php?q=\$uri&\$args;
+  #try_files /wp-content/cache/supercache/\$http_host/\$cache_uri/index.html \$uri \$uri/ /index.php?q=\$uri&\$args;
 
   # Wordpress Permalinks
-  #try_files \$uri \$uri/ /index.php?q=\$uri&\$args;  
+  try_files \$uri \$uri/ /index.php?q=\$uri&\$args;  
 
   }
 
@@ -441,10 +632,10 @@ include /usr/local/nginx/conf/wpsupercache_${vhostname}.conf;
   #autoindex  on;
 
   # for wordpress super cache plugin
-  try_files /wp-content/cache/supercache/\$http_host/\$cache_uri/index.html \$uri \$uri/ /index.php?q=\$uri&\$args;
+  #try_files /wp-content/cache/supercache/\$http_host/\$cache_uri/index.html \$uri \$uri/ /index.php?q=\$uri&\$args;
 
   # Wordpress Permalinks
-  #try_files \$uri \$uri/ /index.php?q=\$uri&\$args;  
+  try_files \$uri \$uri/ /index.php?q=\$uri&\$args;  
 
   }
 
@@ -508,10 +699,10 @@ server {
   #autoindex  on;
 
   # for wordpress super cache plugin
-  try_files /wp-content/cache/supercache/\$http_host/\$cache_uri/index.html \$uri \$uri/ /index.php?q=\$uri&\$args;
+  #try_files /wp-content/cache/supercache/\$http_host/\$cache_uri/index.html \$uri \$uri/ /index.php?q=\$uri&\$args;
 
   # Wordpress Permalinks
-  #try_files \$uri \$uri/ /index.php?q=\$uri&\$args;  
+  try_files \$uri \$uri/ /index.php?q=\$uri&\$args;  
 
   }
 
@@ -593,19 +784,38 @@ if (\$request_uri ~* "/(\?add-to-cart=|cart|my-account|checkout|addons|wp-admin/
 if (\$http_cookie ~* "comment_author|wordpress_[a-f0-9]+|wp-postpass|wordpress_logged_in") { set \$cache_uri 'null cache'; }
 EFF
 
-########### WP Super Cache Start ##############################
+######### Wordpress Manual Install no WP-CLI ######################
 # only proceed in creating vhost if VHOSTNAME directory exist
 if [[ -d "/home/nginx/domains/${vhostname}/public" ]]; then
 
-  cecho "------------------------------------------------------------" $boldgreen
-  cecho "Setup Wordpress + Super Cache for $vhostname" $boldyellow
-  cecho "------------------------------------------------------------" $boldgreen
+  cecho "---------------------------------------------------------------" $boldgreen
+  cecho "Setup Wordpress + Super Cache (vhost only disabled by default) for $vhostname" $boldyellow
+  cecho "---------------------------------------------------------------" $boldgreen
 
-cd /home/nginx/domains/${vhostname}/public
- 
-wp core download --allow-root
- 
-wp core config --dbname=$DB --dbuser=$DBUSER --dbpass=$DBPASS --allow-root
+  cd /home/nginx/domains/${vhostname}
+
+  # download wordpress latest zip
+  rm -rf latest.zip
+  wget -cnv https://wordpress.org/latest.zip
+  unzip -q latest.zip
+  cd wordpress
+  \cp -Rf * /home/nginx/domains/${vhostname}/public
+  rm -rf wordpress
+  cd /home/nginx/domains/${vhostname}/public
+  cp wp-config-sample.php wp-config.php
+  sed -i "/DB_NAME/s/'[^']*'/'${DB}'/2" wp-config.php
+  sed -i "/DB_USER/s/'[^']*'/'${DBUSER}'/2" wp-config.php
+  sed -i "/DB_PASSWORD/s/'[^']*'/'$DBPASS'/2" wp-config.php
+
+#set WP salts
+perl -i -pe'
+  BEGIN {
+    @chars = ("a" .. "z", "A" .. "Z", 0 .. 9);
+    push @chars, split //, "!@#$%^&*()-_ []{}<>~\`+=,.;:/?|";
+    sub salt { join "", map $chars[ rand @chars ], 1 .. 64 }
+  }
+  s/put your unique phrase here/salt()/ge
+' wp-config.php  
  
 NEWPREFIX=$(echo $RANDOM)
 sed -i "s/'wp_';/'${NEWPREFIX}_';/g" wp-config.php
@@ -625,111 +835,29 @@ if [[ -z "$(crontab -l 2>&1 | grep '\/${vhostname}/wp-cron.php')" ]]; then
     crontab -l
 fi
 
-wp core install --url=http://${vhostname} --title=${vhostname} --admin_email=${WPADMINEMAIL} --admin_password=${WPADMINPASS} --admin_name=${WPADMINUSER} --allow-root
-
 # change admin userid from 1 to a random 6 digit number
 # WP_PREFIX=$(wp eval 'echo $GLOBALS["table_prefix"];')
-WUID=$(echo $RANDOM$RANDOM |cut -c1-6)
-# wp db query "UPDATE ${WP_PREFIX}wp_users SET ID=${WUID} WHERE ID=1; UPDATE ${WP_PREFIX}wp_usermeta SET user_id=${WUID} WHERE user_id=1" --allow-root
-wp db query "UPDATE wp_users SET ID=${WUID} WHERE ID=1; UPDATE wp_usermeta SET user_id=${WUID} WHERE user_id=1" --allow-root
+# WUID=$(echo $RANDOM$RANDOM |cut -c1-6)
+# mysql -e "UPDATE wp_users SET ID=${WUID} WHERE ID=1; UPDATE wp_usermeta SET user_id=${WUID} WHERE user_id=1" ${DB}
 
-# add index on autoload
-wp db query "ALTER TABLE ${NEWPREFIX}_options ADD INDEX autoload_idx('autoload')" --allow-root
+  chown nginx:nginx /home/nginx/domains/${vhostname}/public
+  chown -R nginx:nginx /home/nginx/domains/${vhostname}/public
+  
+  cd /home/nginx/domains/${vhostname}/public
+  
+  chmod 0770 wp-content
+  chmod 0400 readme.html
+  rm -rf readme.html
 
-cecho "------------------------------------------------------------" $boldgreen
-wp theme install responsive --activate --allow-root
-cecho "------------------------------------------------------------" $boldgreen
- 
-chown nginx:nginx /home/nginx/domains/${vhostname}/public
-chown -R nginx:nginx /home/nginx/domains/${vhostname}/public
+  mkdir -p wp-content/cache/
+  mkdir -p wp-content/cache/supercache/
+  chown -R nginx:nginx wp-content/
+  chmod -R 0770 wp-content/cache/
+  chmod 0750 wp-content
+  umask 022
 
-cd /home/nginx/domains/${vhostname}/public
-
-chmod 0770 wp-content
-chmod 0400 readme.html
-rm -rf readme.html
-
-# installed + activated by default
-cecho "------------------------------------------------------------" $boldgreen
-wp plugin install wp-super-cache --activate --allow-root
-cecho "------------------------------------------------------------" $boldgreen
-wp plugin install wp-super-cache-clear-cache-menu --activate --allow-root
-cecho "------------------------------------------------------------" $boldgreen
-wp plugin install wp-widget-cache --activate --allow-root
-cecho "------------------------------------------------------------" $boldgreen
-wp plugin install autoptimize --activate --allow-root
-cecho "------------------------------------------------------------" $boldgreen
-wp plugin install rocket-lazy-load --activate --allow-root
-cecho "------------------------------------------------------------" $boldgreen
-wp plugin install wp-security-scan --activate --allow-root
-cecho "------------------------------------------------------------" $boldgreen
-wp plugin install sucuri-scanner --activate --allow-root
-cecho "------------------------------------------------------------" $boldgreen
-wp plugin install disable-xml-rpc --activate --allow-root
-cecho "------------------------------------------------------------" $boldgreen
-wp plugin install limit-login-attempts --activate --allow-root
-cecho "------------------------------------------------------------" $boldgreen
-wp plugin install wp-updates-notifier --activate --allow-root
-cecho "------------------------------------------------------------" $boldgreen
-wp plugin install no-longer-in-directory --activate --allow-root
-cecho "------------------------------------------------------------" $boldgreen
-# wp plugin install google-sitemap-generator --activate --allow-root
-# cecho "------------------------------------------------------------" $boldgreen
-wp plugin install wp-optimize --activate --allow-root
-cecho "------------------------------------------------------------" $boldgreen
-# wp plugin install wp-smushit --activate --allow-root
-# cecho "------------------------------------------------------------" $boldgreen
-wp plugin install tpc-memory-usage --activate --allow-root
-cecho "------------------------------------------------------------" $boldgreen
-wp plugin install gtmetrix-for-wordpress --activate --allow-root
-cecho "------------------------------------------------------------" $boldgreen
-wp plugin install p3-profiler --activate --allow-root
-cecho "------------------------------------------------------------" $boldgreen
-wp plugin install wordpress-seo --activate --allow-root
-cecho "------------------------------------------------------------" $boldgreen
-wp plugin install updraftplus --activate --allow-root
-cecho "------------------------------------------------------------" $boldgreen
-wp plugin install google-analytics-for-wordpress --activate --allow-root
-cecho "------------------------------------------------------------" $boldgreen
-
-# installed but disabled by default
-cecho "------------------------------------------------------------" $boldgreen
-wp plugin install query-monitor --allow-root
-cecho "------------------------------------------------------------" $boldgreen
-wp plugin install go-newrelic --allow-root
-cecho "------------------------------------------------------------" $boldgreen
-wp plugin install db-cache-reloaded-fix --allow-root
-cecho "------------------------------------------------------------" $boldgreen
-wp plugin install google-authenticator --allow-root
-cecho "------------------------------------------------------------" $boldgreen
-wp plugin install addthis-smart-layers --allow-root
-cecho "------------------------------------------------------------" $boldgreen
-wp plugin install search-regex --allow-root
-cecho "------------------------------------------------------------" $boldgreen
-# update all plugins to make sure they are latest available
-wp plugin update --all --allow-root
-echo
-wp plugin status --allow-root
-cecho "------------------------------------------------------------" $boldgreen
-
-chown -R nginx:nginx /home/nginx/domains/${vhostname}/public/wp-content/plugins/
-
-# write permissions for log
-chmod 0660 wp-content/plugins/tpc-memory-usage/logs/tpcmem.log
-
-# fix tcpmem.css incorrect reference to images
-sed -i 's|(images\/|(..\/images\/|g' wp-content/plugins/tpc-memory-usage/css/tpcmem.css
-
-\cp -af wp-content/plugins/wp-super-cache/wp-cache-config-sample.php wp-content/wp-cache-config.php
-\cp -af wp-content/plugins/wp-super-cache/advanced-cache.php wp-content/advanced-cache.php
-mkdir -p wp-content/cache/
-mkdir -p wp-content/cache/supercache/
-chown -R nginx:nginx wp-content/
-chmod -R 0770 wp-content/cache/
-chmod 0750 wp-content
-umask 022
-fi
-########### WP Super Cache End ##############################
+fi # wp install if web root exists
+######### Wordpress Manual Install no WP-CLI ######################
 
   cecho "------------------------------------------------------------" $boldgreen
   cecho "Created uninstall script" $boldyellow
@@ -758,51 +886,46 @@ END
 
 chmod 0700 /root/tools/wp_uninstall_${vhostname}.sh
 
-  cecho "------------------------------------------------------------" $boldgreen
-  cecho "Created wp_updater_${vhostname}.sh script" $boldyellow
-  cecho "/root/tools/wp_updater_${vhostname}.sh" $boldyellow
-  cecho "------------------------------------------------------------" $boldgreen
+#   cecho "------------------------------------------------------------" $boldgreen
+#   cecho "Created wp_updater_${vhostname}.sh script" $boldyellow
+#   cecho "/root/tools/wp_updater_${vhostname}.sh" $boldyellow
+#   cecho "------------------------------------------------------------" $boldgreen
 
-cat > "/root/tools/wp_updater_${vhostname}.sh" <<ENDA
-#!/bin/bash
-PATH=/usr/lib64/ccache:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/root/bin:/root/bin
-EMAIL=$WPADMINEMAIL
+# cat > "/root/tools/wp_updater_${vhostname}.sh" <<ENDA
+# #!/bin/bash
+# PATH=/usr/lib64/ccache:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/root/bin:/root/bin
+# EMAIL=$WPADMINEMAIL
 
-{
-cd /home/nginx/domains/${vhostname}/public
-echo "/home/nginx/domains/${vhostname}/public"
-/usr/bin/wp cli update --allow-root
-/usr/bin/wp plugin status --allow-root
-/usr/bin/wp plugin update --all --allow-root
-} 2>&1 | mail -s "Wordpress WP-CLI Auto Update \$(date)" \$EMAIL
-ENDA
+# {
+# cd /home/nginx/domains/${vhostname}/public
+# echo "/home/nginx/domains/${vhostname}/public"
+# /usr/bin/wp cli update --allow-root
+# /usr/bin/wp plugin status --allow-root
+# /usr/bin/wp plugin update --all --allow-root
+# } 2>&1 | mail -s "Wordpress WP-CLI Auto Update \$(date)" \$EMAIL
+# ENDA
 
-chmod 0700 /root/tools/wp_updater_${vhostname}.sh
+# chmod 0700 /root/tools/wp_updater_${vhostname}.sh
 
-if [[ -z "$(crontab -l 2>&1 | grep wp_updater_${vhostname}.sh)" ]]; then
-    # generate random number of seconds to delay cron start
-    # making sure wp_updater for several wordpress nginx installs
-    # do not run at very same time during cron scheduling
-    DELAY=$(echo ${RANDOM:0:3})
-    crontab -l > cronjoblist
-    echo "0 */8 * * * sleep ${DELAY}s ;/root/tools/wp_updater_${vhostname}.sh 2>/dev/null" >> cronjoblist
-    crontab cronjoblist
-    rm -rf cronjoblist
-    crontab -l
-fi
+# if [[ -z "$(crontab -l 2>&1 | grep wp_updater_${vhostname}.sh)" ]]; then
+#     # generate random number of seconds to delay cron start
+#     # making sure wp_updater for several wordpress nginx installs
+#     # do not run at very same time during cron scheduling
+#     DELAY=$(echo ${RANDOM:0:3})
+#     crontab -l > cronjoblist
+#     echo "0 */8 * * * sleep ${DELAY}s ;/root/tools/wp_updater_${vhostname}.sh 2>/dev/null" >> cronjoblist
+#     crontab cronjoblist
+#     rm -rf cronjoblist
+#     crontab -l
+# fi
 
 echo 
 cecho "-------------------------------------------------------------" $boldyellow
-cmservice nginx reload
+service nginx restart
 if [[ "$PUREFTPD_DISABLED" = [nN] ]]; then
   cmservice pure-ftpd restart
 fi
 
-if [ -f /tmp/setupwp.log ]; then
-  rm -rf /tmp/setupwp.log
-fi
-
-{
 echo 
 if [[ "$PUREFTPD_DISABLED" = [nN] ]]; then
 cecho "-------------------------------------------------------------" $boldyellow
@@ -818,7 +941,7 @@ cecho "vhost for $vhostname created successfully" $boldwhite
 echo
 cecho "domain: http://$vhostname" $boldyellow
 cecho "vhost conf file for $vhostname created: /usr/local/nginx/conf/conf.d/$vhostname.conf" $boldwhite
-if [[ "$vhostssl" = [yY] ]]; then
+if [[ "$sslconfig" = [yY] ]]; then
   echo
   cecho "vhost ssl for $vhostname created successfully" $boldwhite
   echo
@@ -840,20 +963,20 @@ cecho "SSH commands to uninstall created Wordpress install and Nginx vhost:" $bo
 cecho "  /root/tools/wp_uninstall_${vhostname}.sh" $boldyellow
 cecho "------------------------------------------------------------" $boldgreen
 echo
-cecho "------------------------------------------------------------" $boldgreen
-cecho "Wordpress Auto Updater created at:" $boldyellow
-cecho "  /root/tools/wp_updater_${vhostname}.sh" $boldyellow
-cecho "cronjob set for every 8 hours update (3x times per day)" $boldyellow
-cecho "------------------------------------------------------------" $boldgreen
-echo
+# cecho "------------------------------------------------------------" $boldgreen
+# cecho "Wordpress Auto Updater created at:" $boldyellow
+# cecho "  /root/tools/wp_updater_${vhostname}.sh" $boldyellow
+# cecho "cronjob set for every 8 hours update (3x times per day)" $boldyellow
+# cecho "------------------------------------------------------------" $boldgreen
+# echo
 cecho "Wordpress domain: $vhostname" $boldyellow
 cecho "Wordpress DB Name: $DB" $boldyellow
 cecho "Wordpress DB User: $DBUSER" $boldyellow
 cecho "Wordpress DB Pass: $DBPASS" $boldyellow
-cecho "Wordpress Admin User ID: ${WUID}" $boldyellow
-cecho "Wordpress Admin User: $WPADMINUSER" $boldyellow
-cecho "Wordpress Admin Pass: $WPADMINPASS" $boldyellow
-cecho "Wordpress Admin Email: $WPADMINEMAIL" $boldyellow
+# cecho "Wordpress Admin User ID: ${WUID}" $boldyellow
+# cecho "Wordpress Admin User: $WPADMINUSER" $boldyellow
+# cecho "Wordpress Admin Pass: $WPADMINPASS" $boldyellow
+# cecho "Wordpress Admin Email: $WPADMINEMAIL" $boldyellow
 
 if [[ -f /usr/local/nginx/conf/htpasswd.sh && -f /home/nginx/domains/$vhostname/htpasswd_wplogin ]]; then
   echo  
@@ -878,44 +1001,13 @@ cecho "Current vhost listing at: /usr/local/nginx/conf/conf.d/" $boldwhite
 echo
 ls -Alhrt /usr/local/nginx/conf/conf.d/ | awk '{ printf "%-4s%-4s%-8s%-6s %s\n", $6, $7, $8, $5, $9 }'
 
-if [[ "$vhostssl" = [yY] ]]; then
+if [[ "$sslconfig" = [yY] ]]; then
 echo
 cecho "-------------------------------------------------------------" $boldyellow
 cecho "Current vhost ssl files listing at: /usr/local/nginx/conf/ssl/${vhostname}" $boldwhite
 echo
 ls -Alhrt /usr/local/nginx/conf/ssl/${vhostname} | awk '{ printf "%-4s%-4s%-8s%-6s %s\n", $6, $7, $8, $5, $9 }'
 fi
-
-echo
-cecho "------------------------------------------------------------" $boldgreen
-cecho "To complete setup:" $boldyellow
-cecho "1. Enable Permalinks (DO NOT use links with .html extensions for performance reasons) i.e. /%post_id%/%postname%/
-2. Settings Menu > Super Cache > Easy tab and enable it by checking Caching On (Recommended) and hit Update Status
-3. Advanced tab & check Use mod_rewrite serve cache files & Don’t cache pages with GET parameters and Known User. 
-   (Recommended) & hit Update Status
-4. WP Security Menu > Settings > Check All except Enable Live Traffic tool and hit Update settings
-5. Settings Menu > Updates Notifier and setup your notify email address and cronjob (save and test button to check)
-6. Settings Mnenu > Autoptimize and check Optimize HTML, JavaScript and CSS options (show advanced settings)
-7. Settings Menu > Limit Login Attempts and configure as desired or leave as defaults
-8. Sucuri Security Menu and top left click Generate API key for your domain/email and configure your Settings tab
-9. WP-Optimize Menu and configure as needed
-10. Memory Usage Menu > Settings and adjust accordingly
-11. GTmetrix Menu > setup and register your GTmetrix Account and API Key
-12. go-newrelic plugin installed but not activated read https://wordpress.org/plugins/go-newrelic/installation/
-13. Tools > P3 Plugin Profiler > Start Scan to profile all your plugins
-14. Plugins > Query Monitor is disabled by default, enable to check MySQL query stats
-15. Plugins > DB Cache Reloaded disabled by default unsure if works with Wordpress 4.x ?
-16. Appearance > Theme Options (Responsive theme) > Home Page nav bar > Uncheck Overrides Wordpress front page option
-17. Seo Menu (Yoast SEO) > configure accordingly
-18. Settings > UpdraftPlus Backups > Settings set file/database backup intervals & optional backup to remote storage
-19. Analytics > Settings > configure your Google Analytics UA Code" $boldyellow
-cecho "------------------------------------------------------------" $boldgreen
-} 2>&1 | tee /tmp/setupwp.log
-cat /tmp/setupwp.log | perl -pe 's/\x1b.*?[mGKH]//g' | mail -s "${vhostname} Wordpress Installed `date`" $WPADMINEMAIL
-rm -rf /tmp/setupwp.log
-
-echo
-cecho "-------------------------------------------------------------" $boldyellow
 
 else
 
@@ -928,4 +1020,13 @@ echo ""
 
 fi
 
+
 }
+
+if [[ "$RUN" = [yY] ]]; then
+  {
+    funct_nginxaddvhost
+  } 2>&1 | tee ${CENTMINLOGDIR}/centminmod_${DT}_nginx_addvhost_nvwp.log
+else
+  usage
+fi
