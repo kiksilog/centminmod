@@ -58,10 +58,16 @@ else
         if [[ "$(grep '#include \/usr\/local\/nginx\/conf\/vts_http.conf' /usr/local/nginx/conf/nginx.conf)" ]]; then
         sed -i 's/#include \/usr\/local\/nginx\/conf\/vts_http.conf/include \/usr\/local\/nginx\/conf\/vts_http.conf/g' /usr/local/nginx/conf/nginx.conf
         fi
+        if [[ "$(grep '#include \/usr\/local\/nginx\/conf\/vts_mainserver.conf' /usr/local/nginx/conf/conf.d/virtual.conf)" ]]; then
+        sed -i 's|#include \/usr\/local\/nginx\/conf\/vts_mainserver.conf|include \/usr\/local\/nginx\/conf\/vts_mainserver.conf|g' /usr/local/nginx/conf/conf.d/virtual.conf
+        fi
     else
         if [[ "$(grep '^include \/usr\/local\/nginx\/conf\/vts_http.conf' /usr/local/nginx/conf/nginx.conf)" ]]; then
         sed -i 's/include \/usr\/local\/nginx\/conf\/vts_http.conf/#include \/usr\/local\/nginx\/conf\/vts_http.conf/g' /usr/local/nginx/conf/nginx.conf
         fi
+        if [[ "$(grep '^include \/usr\/local\/nginx\/conf\/vts_mainserver.conf' /usr/local/nginx/conf/conf.d/virtual.conf)" ]]; then
+        sed -i 's|^include \/usr\/local\/nginx\/conf\/vts_mainserver.conf|#include \/usr\/local\/nginx\/conf\/vts_mainserver.conf|g' /usr/local/nginx/conf/conf.d/virtual.conf
+        fi        
     fi    
 fi
 
@@ -140,6 +146,7 @@ cecho "Check for old ngx_pagespeed master branch existence" $boldyellow
 if [[ -d "${DIR_TMP}/ngx_pagespeed-release-${NGXPGSPEED_VER}/ngx_pagespeed-master" ]]; then
     # rm -rf ${DIR_TMP}/ngx_pagespeed-release-${NGXPGSPEED_VER}
     rm -rf ${DIR_TMP}/ngx_pagespeed-release-*
+    rm -rf ${DIR_TMP}/ngx_pagespeed-*
     rm -rf ${DIR_TMP}/release-1.9.32*
     nginxpgspeedtarball
 fi
@@ -353,6 +360,22 @@ check_requestscheme
     # Install nginx
     cd $DIR_TMP
 
+    CUR_NGINXVER=$(nginx -v 2>&1 | awk -F '\\/' '{print $2}' |sed -e 's|\.|0|g' | head -n1)
+    CUR_NGINXUPGRADEVER=$(echo $ngver |sed -e 's|\.|0|g' | head -n1)    
+
+if [[ "$NGINXPATCH" = [nN] || "$NGINX_HTTP2" = [nN] ]]; then
+    # if centmin.sh option NGINXPATCH=n then disable patches by 
+    # wiping the nginx downloaded source and redownloading a fresh copy
+    rm -rf nginx-${ngver}*
+fi
+
+if [[ "$(nginx -V 2>&1 | grep -Eo 'with-http_v2_module')" = 'with-http_v2_module' ]]; then
+    # if existing Nginx server is detected to have HTTP/2 patch compiled, then
+    # wipe nginx download source and redownload a fresh copy to ensure you're
+    # patching with latest patch http://nginx.org/patches/http2/ available
+    rm -rf nginx-${ngver}*
+fi
+
     echo "Compiling nginx..."
     if [ -s nginx-${ngver}.tar.gz ]; then
         cecho "nginx ${ngver} Archive found, skipping download..." $boldgreen
@@ -369,12 +392,11 @@ check_requestscheme
 # set_intelflags
 
 if [[ "$NGINXPATCH" = [yY] ]]; then
-
     echo "*************************************************"
-    cecho "Nginx Patch Time - NGINXPATCH_DELAY seconds delay" $boldgreen
+    cecho "Nginx Patch Time - $NGINXPATCH_DELAY seconds delay" $boldgreen
     cecho "to allow you to patch files" $boldgreen
     echo "*************************************************"
-    sleep $NGINXPATCH_DELAY
+    patchnginx
 fi
 
 funct_nginxconfigure
@@ -384,22 +406,10 @@ funct_nginxconfigure
 
 	ERR=$?
 	if [ $ERR != 0 ]; then
-	NOTIFY_MESSAGE="\n`date`\nError: $ERR, Nginx configure failed\n"
-	echo -e "$NOTIFY_MESSAGE" >> "$TMP_MSGFILE"
-
-funct_showtempfile
-	cleanup_msg
-
-	exit
-	
+    	echo -e "\n`date`\nError: $ERR, Nginx configure failed\n"
+        exit
 	else
-
-	NOTIFY_MESSAGE="\n`date`\nSuccess: Nginx configure ok\n"
-	echo -e "$NOTIFY_MESSAGE" >> "$TMP_MSGFILE"
-
-funct_showtempfile
-	cleanup_msg
-
+    	echo -e "\n`date`\nSuccess: Nginx configure ok\n"
 	fi
 
 # error check
@@ -425,22 +435,10 @@ funct_showtempfile
 
 	ERR=$?
 	if [ $ERR != 0 ]; then
-	NOTIFY_MESSAGE="\n`date`\nError: $ERR, Nginx make failed\n"
-	echo -e "$NOTIFY_MESSAGE" >> "$TMP_MSGFILE"
-
-funct_showtempfile
-	cleanup_msg
-
-	exit
-	
+    	echo -e "\n`date`\nError: $ERR, Nginx make failed\n"
+    	exit
 	else
-
-	NOTIFY_MESSAGE="\n`date`\nSuccess: Nginx make ok\n"
-	echo -e "$NOTIFY_MESSAGE" >> "$TMP_MSGFILE"
-
-funct_showtempfile
-	cleanup_msg
-
+	   echo -e "\n`date`\nSuccess: Nginx make ok\n"
 	fi
 
 # error check
@@ -485,41 +483,49 @@ fi
 
 	ERR=$?
 	if [ $ERR != 0 ]; then
-	NOTIFY_MESSAGE="\n`date`\nError: $ERR, Nginx wasn't installed properly\n"
-	echo -e "$NOTIFY_MESSAGE" >> "$TMP_MSGFILE"
-
-funct_showtempfile
-	cleanup_msg
-
-	exit
-	
+    	echo -e "\n`date`\nError: $ERR, Nginx wasn't installed properly\n"
+    	exit
 	else
+    	echo -e "\n`date`\nSuccess: Nginx was installed properly\n"
 
-	NOTIFY_MESSAGE="\n`date`\nSuccess: Nginx was installed properly\n"
-	echo -e "$NOTIFY_MESSAGE" >> "$TMP_MSGFILE"
+    if [[ "$NGINX_HTTP2" = [yY] ]]; then
+        # only apply auto vhost changes forNginx HTTP/2 
+        # if Nginx version is >= 1.9.3 and <1.9.5 OR >= 1.9.5
+        if [[ "$NGX_VEREVAL" -ge '10903' && "$NGX_VEREVAL" -lt '10905' ]] || [[ "$NGX_VEREVAL" -ge '10905' ]]; then
+            for v in $(ls /usr/local/nginx/conf/conf.d/*.conf); do echo $v; egrep -n 'ssl spdy|spdy_headers_comp|Alternate-Protocol' $v; echo "---"; sed -i 's|ssl spdy|ssl http2|g' $v; sed -i 's|spdy_headers_comp|#spdy_headers_comp|g' $v; sed -i 's|add_header Alternate-Protocol|#add_header Alternate-Protocol|g' $v; egrep -n 'ssl http2|spdy_headers_comp|Alternate-Protocol' $v;done
+        fi
+        if [ -f /usr/local/nginx/conf/conf.d/phpmyadmin_ssl.conf ]; then
+            sed -i 's|ssl spdy|ssl http2|g' /usr/local/nginx/conf/conf.d/phpmyadmin_ssl.conf
+            sed -i 's|spdy_headers_comp|#spdy_headers_comp|g' /usr/local/nginx/conf/conf.d/phpmyadmin_ssl.conf
+            sed -i 's|add_header Alternate-Protocol|#add_header Alternate-Protocol|g' /usr/local/nginx/conf/conf.d/phpmyadmin_ssl.conf
+        fi
+    elif [[ "$NGINX_HTTP2" = [nN] || "$NGINX_SPDY" = [yY] ]]; then
+        for v in $(ls /usr/local/nginx/conf/conf.d/*.conf); do echo $v; egrep -n 'ssl http2|#spdy_headers_comp|#Alternate-Protocol' $v; egrep -n 'ssl spdy|spdy_headers_comp' $v; echo "---"; sed -i 's|ssl http2|ssl spdy|g' $v; sed -i 's|#spdy_headers_comp|spdy_headers_comp|g' $v; sed -i 's|#add_header Alternate-Protocol|add_header Alternate-Protocol|g' $v; egrep -n 'ssl spdy|spdy_headers_comp|Alternate-Protocol' $v;done
+        if [ -f /usr/local/nginx/conf/conf.d/phpmyadmin_ssl.conf ]; then
+            sed -i 's|ssl http2|ssl spdy|g' /usr/local/nginx/conf/conf.d/phpmyadmin_ssl.conf
+            sed -i 's|#spdy_headers_comp|spdy_headers_comp|g' /usr/local/nginx/conf/conf.d/phpmyadmin_ssl.conf
+            sed -i 's|#add_header Alternate-Protocol|add_header Alternate-Protocol|g' /usr/local/nginx/conf/conf.d/phpmyadmin_ssl.conf
+        fi        
+    fi
 
-    /etc/init.d/nginx start
+        /etc/init.d/nginx start
 
-    # cecho "Checking OpenSSL version used by Nginx..." $boldyellow
-    # SSLIB=$(ldd `which nginx` | grep ssl | awk '{print $3}')
-    # OPENSSLVER_CHECK=$(strings $SSLIB | grep "^OpenSSL ")
-    # echo $OPENSSLVER_CHECK
+        # cecho "Checking OpenSSL version used by Nginx..." $boldyellow
+        # SSLIB=$(ldd `which nginx` | grep ssl | awk '{print $3}')
+        # OPENSSLVER_CHECK=$(strings $SSLIB | grep "^OpenSSL ")
+        # echo $OPENSSLVER_CHECK
 
-funct_showtempfile
-	cleanup_msg
+        CBODYCHECK=`grep 'client_body_in_file_only on' /usr/local/nginx/conf/nginx.conf`
+        if [ $CBODYCHECK ]; then
+            sed -i 's/client_body_in_file_only on/client_body_in_file_only off/g' /usr/local/nginx/conf/nginx.conf
+        fi
 
-CBODYCHECK=`grep 'client_body_in_file_only on' /usr/local/nginx/conf/nginx.conf`
-if [ $CBODYCHECK ]; then
-sed -i 's/client_body_in_file_only on/client_body_in_file_only off/g' /usr/local/nginx/conf/nginx.conf
-fi
+        geoinccheck
+        geoipphp
 
-geoinccheck
-geoipphp
-
-    echo "*************************************************"
-    cecho "* nginx updated" $boldgreen
-    echo "*************************************************"
-
+        echo "*************************************************"
+        cecho "* nginx updated" $boldgreen
+        echo "*************************************************"
 	fi
 
 # error check

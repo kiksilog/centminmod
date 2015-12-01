@@ -45,10 +45,12 @@ if [[ "$(nginx -V 2>&1 | grep -Eo 'with-http_v2_module')" = 'with-http_v2_module
   HTTPTWO=y
   LISTENOPT='ssl http2'
   COMP_HEADER='#spdy_headers_comp 5'
+  SPDY_HEADER='#add_header Alternate-Protocol  443:npn-spdy/3;'
 else
   HTTPTWO=n
   LISTENOPT='ssl spdy'
   COMP_HEADER='spdy_headers_comp 5'
+  SPDY_HEADER='add_header Alternate-Protocol  443:npn-spdy/3;'
 fi
 
 if [ ! -f /usr/local/nginx/conf/ssl ]; then
@@ -278,9 +280,14 @@ fi
 
 # rate limit setup
 WPRATECHECK=$(grep 'zone=xwplogin' /usr/local/nginx/conf/nginx.conf)
+WPRATERPCCHECK=$(grep 'zone=xwprpc' /usr/local/nginx/conf/nginx.conf)
+
+if [[ -z "$WPRATERPCCHECK" ]]; then
+  sed -i 's/http {/http { \nlimit_req_zone $binary_remote_addr zone=xwprpc:10m rate=30r\/s;\n/g' /usr/local/nginx/conf/nginx.conf
+fi
 
 if [[ -z "$WPRATECHECK" ]]; then
-  sed -i 's/http {/http { \nlimit_req_zone $binary_remote_addr zone=xwplogin:16m rate=40r\/m;\n/g' /usr/local/nginx/conf/nginx.conf
+  sed -i 's/http {/http { \nlimit_req_zone $binary_remote_addr zone=xwplogin:10m rate=40r\/m;\n/g' /usr/local/nginx/conf/nginx.conf
 fi
 
 \cp -f /usr/local/nginx/conf/php.conf /usr/local/nginx/conf/php-wpsc.conf
@@ -359,7 +366,7 @@ location ~* /(wp-login\.php) {
 }
 
 location ~* /(xmlrpc\.php) {
-    limit_req zone=xwplogin burst=2 nodelay;
+    limit_req zone=xwprpc burst=45 nodelay;
     #limit_conn xwpconlimit 30;
     include /usr/local/nginx/conf/php-wpsc.conf;
 }
@@ -398,9 +405,9 @@ server {
   include /usr/local/nginx/conf/ssl_include.conf;
 
   # mozilla recommended
-  ssl_ciphers ${CHACHACIPHERS}ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES256-GCM-SHA384:DHE-RSA-AES128-GCM-SHA256:DHE-DSS-AES128-GCM-SHA256:kEDH+AESGCM:ECDHE-RSA-AES128-SHA256:ECDHE-ECDSA-AES128-SHA256:ECDHE-RSA-AES128-SHA:ECDHE-ECDSA-AES128-SHA:ECDHE-RSA-AES256-SHA384:ECDHE-ECDSA-AES256-SHA384:ECDHE-RSA-AES256-SHA:ECDHE-ECDSA-AES256-SHA:DHE-RSA-AES128-SHA256:DHE-RSA-AES128-SHA:DHE-DSS-AES128-SHA256:DHE-RSA-AES256-SHA256:DHE-DSS-AES256-SHA:DHE-RSA-AES256-SHA:AES128-GCM-SHA256:AES256-GCM-SHA384:AES128-SHA256:AES256-SHA256:AES128-SHA:AES256-SHA:AES:CAMELLIA:DES-CBC3-SHA:!aNULL:!eNULL:!EXPORT:!DES:!RC4:!MD5:!PSK:!aECDH:!EDH-DSS-DES-CBC3-SHA:!EDH-RSA-DES-CBC3-SHA:!KRB5-DES-CBC3-SHA:!CAMELLIA;
+  ssl_ciphers ${CHACHACIPHERS}ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES256-GCM-SHA384:DHE-RSA-AES128-GCM-SHA256:DHE-DSS-AES128-GCM-SHA256:kEDH+AESGCM:ECDHE-RSA-AES128-SHA256:ECDHE-ECDSA-AES128-SHA256:ECDHE-RSA-AES128-SHA:ECDHE-ECDSA-AES128-SHA:ECDHE-RSA-AES256-SHA384:ECDHE-ECDSA-AES256-SHA384:ECDHE-RSA-AES256-SHA:ECDHE-ECDSA-AES256-SHA:DHE-RSA-AES128-SHA256:DHE-RSA-AES128-SHA:DHE-DSS-AES128-SHA256:DHE-RSA-AES256-SHA256:DHE-DSS-AES256-SHA:DHE-RSA-AES256-SHA:AES128-GCM-SHA256:AES256-GCM-SHA384:AES128-SHA256:AES256-SHA256:AES128-SHA:AES256-SHA:AES:CAMELLIA:DES-CBC3-SHA:!aNULL:!eNULL:!EXPORT:!DES:!RC4:!MD5:!PSK:!aECDH:!EDH-DSS-DES-CBC3-SHA:!EDH-RSA-DES-CBC3-SHA:!KRB5-DES-CBC3-SHA:!CAMELLIA:!DES-CBC3-SHA;
   ssl_prefer_server_ciphers   on;
-  add_header Alternate-Protocol  443:npn-spdy/3;
+  $SPDY_HEADER
   #add_header Strict-Transport-Security "max-age=31536000; includeSubdomains;";
   #add_header  X-Content-Type-Options "nosniff";
   #add_header X-Frame-Options DENY;
@@ -457,7 +464,7 @@ location ~* /(wp-login\.php) {
 }
 
 location ~* /(xmlrpc\.php) {
-    limit_req zone=xwplogin burst=2 nodelay;
+    limit_req zone=xwprpc burst=45 nodelay;
     #limit_conn xwpconlimit 30;
     include /usr/local/nginx/conf/php-wpsc.conf;
 }
@@ -502,6 +509,8 @@ server {
 
   root /home/nginx/domains/$vhostname/public;
 
+  include /usr/local/nginx/conf/wpsupercache_${vhostname}.conf;    
+
   location / {
 
   # Enables directory listings when index file not found
@@ -524,7 +533,7 @@ location ~* /(wp-login\.php) {
 }
 
 location ~* /(xmlrpc\.php) {
-    limit_req zone=xwplogin burst=2 nodelay;
+    limit_req zone=xwprpc burst=45 nodelay;
     #limit_conn xwpconlimit 30;
     include /usr/local/nginx/conf/php-wpsc.conf;
 }
@@ -574,7 +583,7 @@ return 444;
 }
 
 #disallow
-location ~* (roundcube|webdav|smtp|http\:|soap|w00tw00t) {
+location ~* (w00tw00t) {
 return 444;
 }
 
@@ -744,9 +753,9 @@ rm -rf /home/nginx/domains/${vhostname}
 rm -rf /usr/local/nginx/conf/wpsecure_${vhostname}.conf
 rm -rf /usr/local/nginx/conf/wpsupercache_${vhostname}.conf
 rm -rf /root/tools/wp_updater_${vhostname}.sh
-rm -rf /usr/local/nginx/conf/ssl/${vhostname}/${vhostname}.crt"
-rm -rf /usr/local/nginx/conf/ssl/${vhostname}/${vhostname}.key"
-rm -rf /usr/local/nginx/conf/ssl/${vhostname}/${vhostname}.csr"
+rm -rf /usr/local/nginx/conf/ssl/${vhostname}/${vhostname}.crt
+rm -rf /usr/local/nginx/conf/ssl/${vhostname}/${vhostname}.key
+rm -rf /usr/local/nginx/conf/ssl/${vhostname}/${vhostname}.csr
 rm -rf /usr/local/nginx/conf/ssl/${vhostname}
 crontab -l > cronjoblist
 sed -i "/wp_updater_${vhostname}.sh/d" cronjoblist
@@ -771,9 +780,17 @@ EMAIL=$WPADMINEMAIL
 {
 cd /home/nginx/domains/${vhostname}/public
 echo "/home/nginx/domains/${vhostname}/public"
-/usr/bin/wp cli update --allow-root
+#/usr/bin/wp cli update --allow-root
+echo "update wp-cli"
+rm -rf /usr/bin/wp
+wget -cnv --no-check-certificate https://raw.github.com/wp-cli/builds/gh-pages/phar/wp-cli.phar -O /usr/bin/wp --tries=3
+chmod 0700 /usr/bin/wp
+/usr/bin/wp --info --allow-root
 /usr/bin/wp plugin status --allow-root
 /usr/bin/wp plugin update --all --allow-root
+#/usr/bin/wp core check-update --allow-root
+#/usr/bin/wp core update --allow-root
+#/usr/bin/wp core update-db --allow-root
 } 2>&1 | mail -s "Wordpress WP-CLI Auto Update \$(date)" \$EMAIL
 ENDA
 
@@ -892,7 +909,7 @@ cecho "To complete setup:" $boldyellow
 cecho "1. Enable Permalinks (DO NOT use links with .html extensions for performance reasons) i.e. /%post_id%/%postname%/
 2. Settings Menu > Super Cache > Easy tab and enable it by checking Caching On (Recommended) and hit Update Status
 3. Advanced tab & check Use mod_rewrite serve cache files & Don’t cache pages with GET parameters and Known User. 
-   (Recommended) & hit Update Status
+   (Recommended), Cache rebuild for anonymous users, clear all cache when a post or page updated & hit Update Status
 4. WP Security Menu > Settings > Check All except Enable Live Traffic tool and hit Update settings
 5. Settings Menu > Updates Notifier and setup your notify email address and cronjob (save and test button to check)
 6. Settings Mnenu > Autoptimize and check Optimize HTML, JavaScript and CSS options (show advanced settings)

@@ -148,6 +148,68 @@ mjemalloc() {
     fi    
 }
 
+fixlogrotate() {
+	if [ -z "$(grep '\$' /etc/logrotate.d/nginx)" ]; then
+		# sed -i "s|kill.*|kill -SIGUSR1 \$(cat \/usr\/local\/nginx\/logs\/nginx.pid 2>\/dev\/null) 2>\/dev\/null \|\| true|g" /etc/logrotate.d/nginx
+cat > "/etc/logrotate.d/nginx" <<END
+/var/log/nginx/*.log /usr/local/nginx/logs/*.log /home/nginx/domains/*/log/*.log {
+        daily
+        dateext
+        missingok
+        rotate 10
+        size=500M
+        compress
+        delaycompress
+        notifempty
+        postrotate
+        /bin/kill -SIGUSR1 \$(cat /usr/local/nginx/logs/nginx.pid 2>/dev/null) 2>/dev/null || true
+        endscript           
+}
+END
+	fi
+
+	if [ -z "$(grep '\$' /etc/logrotate.d/php-fpm)" ]; then
+		# sed -i "s|kill.*|kill -SIGUSR1 \$(cat \/var\/run\/php-fpm\/php-fpm.pid 2>\/dev\/null) 2>\/dev\/null \|\| true|g" /etc/logrotate.d/php-fpm
+cat > "/etc/logrotate.d/php-fpm" <<END
+/var/log/php-fpm/*.log {
+        daily
+        dateext
+        missingok
+        rotate 10
+        size=500M
+        compress
+        delaycompress
+        notifempty
+        postrotate
+        /bin/kill -SIGUSR1 \$(cat /var/run/php-fpm/php-fpm.pid 2>/dev/null) 2>/dev/null || true
+        endscript            
+}
+END
+	fi
+}
+
+leupdates() {
+	# update .well-known content-type
+	CHECKCONTENTTYPE=$(grep 'application\/jose+json' /usr/local/nginx/conf/staticfiles.conf)
+	if [ "$CHECKCONTENTTYPE" ]; then
+		sed -i "s|application\/jose+json|text\/plain|" /usr/local/nginx/conf/staticfiles.conf
+	fi
+}
+
+memcachedupdatechecks() {
+	# 1.4.25 added options https://community.centminmod.com/threads/memcached-1-4-25-released.5007/
+	if [[ "$INITIALINSTALL" != [yY] ]]; then
+		if [[ -z "$(grep 'MEM_CURVER' /etc/init.d/memcached)" ]]; then
+			if [[ -f /usr/local/src/centminmod/config/memcached/memcached1425.patch && -f /etc/init.d/memcached ]]; then
+				\cp -f /usr/local/src/centminmod/config/memcached/memcached1425.patch /etc/init.d/memcached1425.patch
+				cd /etc/init.d/
+				patch -s < memcached1425.patch
+				rm -rf memcached1425.patch
+			fi
+		fi
+	fi
+}
+
 cpcheck() {
 
 if [ -f /var/cpanel/cpanel.config ]; then
@@ -179,6 +241,9 @@ if [[ "$INITIALINSTALL" != [yY] ]]; then
 	mjemalloc
 	blockeditorcheck
 	rpcnfsports
+	fixlogrotate
+	leupdates
+	memcachedupdatechecks
 fi
 
 }

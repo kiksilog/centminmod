@@ -30,7 +30,7 @@ sort_buffer_size = 256K
 table_definition_cache = 4096
 table_open_cache = 2048
 thread_cache_size = 64
-wait_timeout = 120
+wait_timeout = 1800
 connect_timeout = 10
 tmp_table_size = 32M
 max_heap_table_size = 32M
@@ -51,7 +51,7 @@ query_prealloc_size = 262144
 query_alloc_block_size = 65536
 transaction_alloc_block_size = 8192
 transaction_prealloc_size = 4096
-default-storage-engine = MyISAM
+default-storage-engine = InnoDB
 
 log_warnings=1
 slow_query_log=0

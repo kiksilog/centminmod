@@ -265,10 +265,12 @@ NGINXUPGRADESLEEP='6'
 NSD_INSTALL=n                # Install NSD (DNS Server)
 NSD_VERSION='3.2.18'         # NSD Version
 NTP_INSTALL=y                # Install Network time protocol daemon
-NGINXPATCH=n                 # Set to y to allow NGINXPATCH_DELAY seconds time before Nginx configure and patching Nginx
-NGINXPATCH_DELAY='120'       # Number of seconds to pause Nginx configure routine during Nginx upgrades
+NGINXPATCH=y                 # Set to y to allow NGINXPATCH_DELAY seconds time before Nginx configure and patching Nginx
+NGINXPATCH_DELAY='1'         # Number of seconds to pause Nginx configure routine during Nginx upgrades
 STRIPNGINX='y'               # set 'y' to strip nginx binary to reduce size
 NGINX_INSTALL=y              # Install Nginx (Webserver)
+NGINX_DEBUG=n                # Enable & reinstall Nginx debug log nginx.org/en/docs/debugging_log.html & wiki.nginx.org/Debugging
+NGINX_HTTP2=y 
 NGINX_GEOIP=n                # Nginx GEOIP module install
 NGINX_SPDY=n                 # Nginx SPDY support
 NGINX_STREAM=n               # http://nginx.org/en/docs/stream/ngx_stream_core_module.html
@@ -281,8 +283,8 @@ NGINX_FANCYINDEX=y           # http://wiki.nginx.org/NgxFancyIndex
 NGINX_VHOSTSTATS=y           # https://github.com/vozlt/nginx-module-vts
 NGINX_PAGESPEED=n            # Install ngx_pagespeed
 NGINX_PAGESPEEDGITMASTER=n   # Install ngx_pagespeed from official github master instead  
-NGXPGSPEED_VER='1.9.32.6-beta'
-NGINX_PAGESPEEDPSOL_VER='1.9.32.6'
+NGXPGSPEED_VER='1.9.32.10-beta'
+NGINX_PAGESPEEDPSOL_VER='1.9.32.10'
 NGINX_PASSENGER='n'          # Install Phusion Passenger requires installing addons/passenger.sh before hand
 NGINX_WEBDAV=n               # Nginx WebDAV and nginx-dav-ext-module
 NGINX_EXTWEBDAVVER='0.0.3'   # nginx-dav-ext-module version
@@ -291,7 +293,7 @@ NGINX_HTTPREDIS=y            # Nginx redis http://wiki.nginx.org/HttpRedisModule
 NGINX_HTTPREDISVER='0.3.7'   # Nginx redis version
 NGINX_PCREJIT=y              # Nginx configured with pcre & pcre-jit support
 NGINX_PCREVER='8.37'         # Version of PCRE used for pcre-jit support in Nginx
-NGINX_HEADERSMORE='0.261'
+NGINX_HEADERSMORE='0.28'
 NGINX_CACHEPURGEVER='2.3'
 NGINX_STICKY='n'             # nginx sticky module https://bitbucket.org/nginx-goodies/nginx-sticky-module-ng
 NGINX_STICKYVER='1.2.5'
@@ -309,7 +311,7 @@ LUAJIT_GITINSTALL='y'        # opt to install luajit 2.1 from dev branch http://
 LUAJIT_GITINSTALLVER='2.1'   # branch version = v2.1 will override ORESTY_LUAGITVER if LUAJIT_GITINSTALL='y'
 
 ORESTY_LUANGINX='y'             # enable or disable or ORESTY_LUA* nginx modules below
-ORESTY_LUANGINXVER='0.9.16'     # openresty lua-nginx-module https://github.com/openresty/lua-nginx-module
+ORESTY_LUANGINXVER='0.9.18'     # openresty lua-nginx-module https://github.com/openresty/lua-nginx-module
 ORESTY_LUAGITVER='2.0.4'        # luagit http://luajit.org/
 ORESTY_LUAMEMCACHEDVER='0.13'   # openresty https://github.com/openresty/lua-resty-memcached
 ORESTY_LUAMYSQLVER='0.15'       # openresty https://github.com/openresty/lua-resty-mysql
@@ -323,7 +325,7 @@ ORESTY_LUAREDISPARSERVER='0.10'    # openresty https://github.com/openresty/lua-
 ORESTY_LUAUPSTREAMCHECKVER='0.03'  # openresty https://github.com/openresty/lua-resty-upstream-healthcheck
 ORESTY_LUALRUCACHEVER='0.04'       # openresty https://github.com/openresty/lua-resty-lrucache
 ORESTY_LUARESTYCOREVER='0.1.0'     # openresty https://github.com/openresty/lua-resty-core
-ORESTY_LUAUPSTREAMVER='0.03'       # openresty https://github.com/openresty/lua-upstream-nginx-module
+ORESTY_LUAUPSTREAMVER='0.04'       # openresty https://github.com/openresty/lua-upstream-nginx-module
 ORESTY_LUALOGGERSOCKETVER='0.1'    # cloudflare openresty https://github.com/cloudflare/lua-resty-logger-socket
 ORESTY_LUACOOKIEVER='master'       # cloudflare openresty https://github.com/cloudflare/lua-resty-cookie
 ORESTY_LUAUPSTREAMCACHEVER='0.1.1' # cloudflare openresty https://github.com/cloudflare/lua-upstream-cache-nginx-module
@@ -367,7 +369,7 @@ MYSQL_INSTALL=n              # Install official Oracle MySQL Server (MariaDB alt
 SENDMAIL_INSTALL=n           # Install Sendmail (and mailx) set to y and POSTFIX_INSTALL=n for sendmail
 POSTFIX_INSTALL=y            # Install Postfix (and mailx) set to n and SENDMAIL_INSTALL=y for sendmail
 # Nginx
-NGINX_VERSION='1.9.4'        # Use this version of Nginx
+NGINX_VERSION='1.9.7'        # Use this version of Nginx
 NGINX_VHOSTSSL='y'           # enable centmin.sh menu 2 prompt to create self signed SSL vhost 2nd vhost conf
 NGINXBACKUP='y'
 NGINXDIR='/usr/local/nginx'
@@ -383,7 +385,7 @@ CLOUDFLARE_PATCHSSL='n'    # set 'y' to implement Cloudflare's kill RC4 patch ht
 
 # LibreSSL
 LIBRESSL_SWITCH='y'        # if set to 'y' it overrides OpenSSL as the default static compiled option for Nginx server
-LIBRESSL_VERSION='2.2.3'   # Use this version of LibreSSL http://www.libressl.org/
+LIBRESSL_VERSION='2.2.4'   # Use this version of LibreSSL http://www.libressl.org/
 ##################################
 
 # Choose whether to compile Nginx --with-google_perftools_module
@@ -400,7 +402,7 @@ PCRE_VERSION='8.37'          # NO longer used/ignored
 IMAGICKPHP_VER='3.3.0RC2'   # PHP extension for imagick
 MEMCACHED_INSTALL=y          # Install Memcached
 LIBEVENT_VERSION='2.0.22'    # Use this version of Libevent
-MEMCACHED_VERSION='1.4.24'    # Use this version of Memcached server
+MEMCACHED_VERSION='1.4.25'    # Use this version of Memcached server
 MEMCACHE_VERSION='3.0.8'     # Use this version of Memcache
 MEMCACHEDPHP_VER='2.2.0'    # Memcached PHP extension not server
 LIBMEMCACHED_YUM='y'        # switch to YUM install instead of source compile
@@ -426,7 +428,7 @@ ZOPCACHECACHE_VERSION='7.0.5'   # for PHP <=5.4 http://pecl.php.net/package/Zend
 ZOPCACHE_OVERRIDE='n'           # =y will override PHP 5.5, 5.6, 7.0 inbuilt Zend OpCache version
 # Python
 PYTHON_VERSION='2.7.10'       # Use this version of Python
-SIEGE_VERSION='3.1.0'
+SIEGE_VERSION='3.1.3'
 
 WGETOPT='-cnv --no-dns-cache -4'
 ###############################################################
@@ -442,7 +444,7 @@ CENTALTREPO_DISABLE=y
 RPMFORGEREPO_DISABLE=n
 AXIVOREPO_DISABLE=n
 REMIREPO_DISABLE=n
-ATRPMSREPO_DISABLE=n
+ATRPMSREPO_DISABLE=y
 
 # custom curl/libcurl RPM for 7.43 and higher
 # enable with CUSTOM_CURLRPM=y
@@ -543,6 +545,7 @@ source "inc/nginx_configure.inc"
 # source "inc/nginx_configure_openresty.inc"
 source "inc/geoip.inc"
 source "inc/luajit.inc"
+source "inc/nginx_patch.inc"
 source "inc/nginx_install.inc"
 source "inc/nginx_upgrade.inc"
 source "inc/imagick_install.inc"
@@ -1623,11 +1626,11 @@ TMP_MSGFILE="$DIR_TMP/msglogs/$RANDOM.msg"
 
 function cleanup_msg {
 	rm -f "$TMP_MSGFILE"
-	#exit 1
+	exit 1
 }
 
 # http://linuxcommand.org/wss0160.php
-trap clean_msg SIGHUP SIGINT SIGTERM
+trap cleanup_msg SIGHUP SIGINT SIGTERM
 
 # end functions
 #####################################################################

@@ -14,17 +14,11 @@ Fastest method of install and allows fully unattended installation. Just type th
 
 ### For latest 1.2.3-eva2000.08 stable install
 
-
-    curl -sL http://centminmod.com/stableinstaller.sh | bash
-
-or
-
-    curl -sL http://centminmod.com/installer.sh | bash
+    curl -O https://centminmod.com/installer.sh && chmod 0700 installer.sh && bash installer.sh
 
 ### For latest 1.2.3-eva2000.09 beta install
 
-
-    curl -sL http://centminmod.com/betainstaller.sh | bash
+    curl -O https://centminmod.com/betainstaller.sh && chmod 0700 betainstaller.sh && bash betainstaller.sh
 
 ## Centmin Mod installed via Git    
 
@@ -51,14 +45,14 @@ or for CLI install mode
 ### Step 1.
 
 
-Select the branch you want to install from list at https://github.com/centminmod/centminmod/branches and define it in the variable named branchname typed on SSH command line as follows.
+Select the branch you want to install from list at https://github.com/centminmod/centminmod/branches and use the following command (in your SSH console) to set it:
 
     branchname=123.08stable
 
 ### Step 2.
 
 
-Actual install, type as root user in SSH these commands, Centmin Mod will have it's install setup at /usr/local/src/centminmod
+To get the Centmin Mod files, run the following commands in a console as root. These commands will download the files to `/usr/local/src/centminmod`
 
     yum -y install wget nano bc unzip
     branchname=123.08stable
@@ -68,12 +62,10 @@ Actual install, type as root user in SSH these commands, Centmin Mod will have i
     mv centminmod-${branchname} centminmod
     cd centminmod
 
-Then to install either type
-
-for menu mode run centmin.sh and select menu option 1 to install
+To run the actual install in menu mode run `centmin.sh` (still as root) and select menu option 1 to install:
 
     ./centmin.sh
 
-or for CLI install mode
+or to install in CLI mode:
 
     ./centmin.sh install
